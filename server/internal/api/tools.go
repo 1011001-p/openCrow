@@ -68,7 +68,8 @@ func isBuiltinToolName(name string) bool {
 		"send_notification", "setup_telegram_bot",
 		"execute_shell_command", "manage_process",
 		"ssh_execute",
-		"list_skills", "get_skill", "install_skills",
+		"transcribe_audio",
+		"list_skills", "get_skill", "create_skill", "delete_skill", "install_skills",
 		"list_mcp_servers", "add_mcp_server", "remove_mcp_server":
 		return true
 	default:
@@ -168,12 +169,22 @@ func (s *Server) executeTool(ctx context.Context, userID, name string, args map[
 	case "ssh_execute":
 		return s.toolRemoteExecute(ctx, userID, args)
 
+	// ── Voice / Whisper ──────────────────────────────────────────────
+	case "transcribe_audio":
+		return s.toolTranscribeAudio(ctx, args)
+
 	// ── Skills ───────────────────────────────────────────────────────
 	case "list_skills":
 		return s.toolListSkills()
 
 	case "get_skill":
 		return s.toolGetSkill(args)
+
+	case "create_skill":
+		return s.toolCreateSkill(args)
+
+	case "delete_skill":
+		return s.toolDeleteSkill(args)
 
 	case "install_skills":
 		return s.toolInstallSkills(args)
@@ -252,6 +263,48 @@ func (s *Server) toolInstallSkills(args map[string]any) (map[string]any, error) 
 		"count":     len(installed),
 	}, nil
 }
+
+func (s *Server) toolCreateSkill(args map[string]any) (map[string]any, error) {
+	if s.skillStore == nil {
+		return map[string]any{"success": false, "error": "skill store not available"}, nil
+	}
+	slug, _ := args["slug"].(string)
+	content, _ := args["content"].(string)
+	if slug == "" {
+		return map[string]any{"success": false, "error": "slug is required"}, nil
+	}
+	if content == "" {
+		return map[string]any{"success": false, "error": "content is required"}, nil
+	}
+	// Sanitise slug: lowercase, only alphanumeric and hyphens
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	if err := s.skillStore.Save(slug, content); err != nil {
+		return map[string]any{"success": false, "error": err.Error()}, nil
+	}
+	sf, _ := s.skillStore.Get(slug)
+	result := map[string]any{"success": true, "slug": slug}
+	if sf != nil {
+		result["name"] = sf.Name
+		result["description"] = sf.Description
+	}
+	return result, nil
+}
+
+func (s *Server) toolDeleteSkill(args map[string]any) (map[string]any, error) {
+	if s.skillStore == nil {
+		return map[string]any{"success": false, "error": "skill store not available"}, nil
+	}
+	slug, _ := args["slug"].(string)
+	if slug == "" {
+		return map[string]any{"success": false, "error": "slug is required"}, nil
+	}
+	if err := s.skillStore.Delete(slug); err != nil {
+		return map[string]any{"success": false, "error": err.Error()}, nil
+	}
+	return map[string]any{"success": true, "slug": slug}, nil
+}
+
+
 
 // ── MCP tools ─────────────────────────────────────────────────────────────────
 
@@ -1669,7 +1722,7 @@ func (s *Server) toolExecuteShellCommand(ctx context.Context, userID string, arg
 	}
 
 	// Shell is fixed.
-	shell := "/bin/bash"
+	shell := resolveShell()
 
 	// Background mode
 	if bg, ok := args["background"].(bool); ok && bg {
@@ -1912,4 +1965,51 @@ func (s *Server) writeToolCallToTerminal(userID, kind, name string, args map[str
 	buf.WriteString("\x1b[2m───────────────────────────────────\x1b[0m\r\n")
 
 	s.termMgr.BroadcastOutput(userID, []byte(buf.String()))
+}
+
+// ── toolTranscribeAudio ───────────────────────────────────────────────────────
+
+func (s *Server) toolTranscribeAudio(ctx context.Context, args map[string]any) (any, error) {
+	filePath, _ := args["path"].(string)
+	if filePath == "" {
+		return map[string]any{"success": false, "error": "path is required"}, nil
+	}
+
+	if s.whisper == nil || !s.whisper.IsReady() {
+		return map[string]any{"success": false, "error": "whisper is not available or still initializing"}, nil
+	}
+
+	audioData, err := os.ReadFile(filePath)
+	if err != nil {
+		return map[string]any{"success": false, "error": fmt.Sprintf("could not read file: %s", err)}, nil
+	}
+
+	ext := strings.ToLower(filePath)
+	var mimeType string
+	switch {
+	case strings.HasSuffix(ext, ".mp3"):
+		mimeType = "audio/mpeg"
+	case strings.HasSuffix(ext, ".mp4"), strings.HasSuffix(ext, ".m4v"):
+		mimeType = "audio/mp4"
+	case strings.HasSuffix(ext, ".m4a"):
+		mimeType = "audio/m4a"
+	case strings.HasSuffix(ext, ".wav"):
+		mimeType = "audio/wav"
+	case strings.HasSuffix(ext, ".webm"):
+		mimeType = "audio/webm"
+	default:
+		mimeType = "audio/ogg"
+	}
+
+	transcript, err := s.whisper.Transcribe(ctx, audioData, mimeType)
+	if err != nil {
+		return map[string]any{"success": false, "error": err.Error()}, nil
+	}
+
+	return map[string]any{
+		"success":    true,
+		"transcript": transcript,
+		"path":       filePath,
+		"length":     len(transcript),
+	}, nil
 }

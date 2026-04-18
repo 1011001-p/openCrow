@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { endpoints, type WorkerStat, type WorkerLogEntry, type HealthResponse, type TelegramBotConfig } from "@/lib/api";
+import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { HeartbeatDot } from "@/components/ui/HeartbeatDot";
 import { AnimatedDot } from "@/components/ui/AnimatedDot";
@@ -109,6 +110,46 @@ function StatusCard({
   );
 }
 
+// ─── Whisper Status Card ───
+
+function WhisperStatusCard() {
+  const [status, setStatus] = useState<"ok" | "downloading" | "down" | "loading">("loading");
+  const [model, setModel] = useState<string>("");
+
+  useEffect(() => {
+    endpoints.getWhisperStatus()
+      .then((res) => { setStatus(res.status); setModel(res.model); })
+      .catch(() => setStatus("down"));
+  }, []);
+
+  const cardStatus: "ok" | "error" | "idle" =
+    status === "ok" ? "ok" :
+    status === "down" ? "error" : "idle";
+
+  const dotStatus =
+    status === "loading" || status === "downloading" ? "pending" :
+    status === "ok" ? "ok" :
+    status === "down" ? "error" : "idle";
+
+  return (
+    <StatusCard title="Whisper (Voice)" status={cardStatus}>
+      <div className="flex items-center gap-3">
+        {status === "loading" ? (
+          <Spinner size="sm" />
+        ) : (
+          <AnimatedDot status={dotStatus as "ok" | "error" | "pending" | "idle"} />
+        )}
+        <span className="text-sm text-on-surface">
+          {status === "loading" && <span className="text-on-surface-variant">Checking...</span>}
+          {status === "ok" && <><span className="font-mono text-cyan">{model}</span><span className="text-on-surface-variant ml-2">ready</span></>}
+          {status === "downloading" && <><span className="font-mono text-warning">{model}</span><span className="text-on-surface-variant ml-2">downloading model...</span></>}
+          {status === "down" && <span className="text-on-surface-variant">Whisper sidecar unavailable</span>}
+        </span>
+      </div>
+    </StatusCard>
+  );
+}
+
 // ─── Default Channel Status ───
 
 function DefaultChannelCard() {
@@ -198,7 +239,7 @@ export default function OverviewView() {
       </div>
 
       {/* Status grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatusCard title="Backend Connection" status={backendStatus}>
           <div className="flex items-center gap-3">
             <AnimatedDot status={backendStatus === "idle" ? "idle" : backendStatus} />
@@ -217,6 +258,7 @@ export default function OverviewView() {
         </StatusCard>
 
         <DefaultChannelCard />
+        <WhisperStatusCard />
       </div>
 
       {/* Worker Terminals */}

@@ -358,6 +358,73 @@ func (s *Server) runOrchestratorForUser(ctx context.Context, workerName, userID,
 	return result, nil
 }
 
+// runOrchestratorForUserWithHistory is like runOrchestratorForUser but loads
+// the full conversation history from the DB and passes it to the LLM, giving
+// the model context of the ongoing conversation.
+func (s *Server) runOrchestratorForUserWithHistory(ctx context.Context, workerName, userID, convID, prompt string) (orchestrator.CompletionResult, error) {
+	var cfg *configstore.UserConfig
+	if s.configStore != nil {
+		if c, err := s.configStore.GetUserConfig(userID); err == nil {
+			cfg = &c
+		}
+	}
+
+	systemPrompt := s.buildSystemPrompt(ctx, userID, cfg)
+
+	var toolSpecs []orchestrator.ToolSpec
+	if cfg != nil {
+		for _, def := range cfg.Tools.Definitions {
+			if !cfg.Tools.Enabled[def.ID] {
+				continue
+			}
+			props := map[string]any{}
+			var required []string
+			for _, p := range def.Parameters {
+				props[p.Name] = map[string]any{"type": p.Type, "description": p.Description}
+				if p.Required {
+					required = append(required, p.Name)
+				}
+			}
+			toolSpecs = append(toolSpecs, orchestrator.ToolSpec{
+				Name:        sanitizeToolName(def.Name),
+				Description: def.Description,
+				Parameters:  map[string]any{"properties": props, "required": required},
+			})
+		}
+	}
+
+	providers := buildProvidersFromConfig(cfg)
+	svc := s.orchestrator
+	if len(providers) > 0 {
+		svc = orchestrator.NewService(providers, orchestrator.ToolLoopGuard{})
+	}
+
+	// Load conversation history from DB
+	var chatMsgs []orchestrator.ChatMessage
+	if convID != "" {
+		if history, err := s.listMessages(ctx, userID, convID); err == nil {
+			for _, m := range history {
+				chatMsgs = append(chatMsgs, orchestrator.ChatMessage{Role: m.Role, Content: m.Content})
+			}
+		} else {
+			s.wlog(workerName, "[%s] failed to load history for conv %s: %v", workerName, convID, err)
+		}
+	}
+	chatMsgs = append(chatMsgs, orchestrator.ChatMessage{Role: "user", Content: prompt})
+	chatMsgs = orchestrator.TrimMessages(chatMsgs, 40)
+
+	result, err := svc.Complete(ctx, orchestrator.CompletionRequest{
+		System:       systemPrompt,
+		Messages:     chatMsgs,
+		Tools:        toolSpecs,
+		ToolExecutor: s.buildToolExecutor(ctx, userID),
+	})
+	if err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
 func (s *Server) logWorkerOrchestratorTrace(workerName, runLabel string, result orchestrator.CompletionResult) {
 	if len(result.Trace.ProviderAttempts) > 0 {
 		for _, attempt := range result.Trace.ProviderAttempts {
@@ -977,9 +1044,12 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 			continue
 		}
 
-		// Handle /new command
+		// Handle /new command -- start a fresh conversation
 		if strings.TrimSpace(msg.Text) == "/new" {
-			s.wlog("telegram-worker", "[telegram-worker] /new command from chat %s -- sending confirmation", chatIDStr)
+			s.wlog("telegram-worker", "[telegram-worker] /new command from chat %s -- starting fresh conversation", chatIDStr)
+			if _, err := s.newTelegramConversation(ctx, userID, chatIDStr); err != nil {
+				s.wlog("telegram-worker", "[telegram-worker] failed to create new conversation: %v", err)
+			}
 			if sendErr := s.sendTelegramMessage(ctx, bot.BotToken, msg.Chat.ID, ":white_check_mark: New conversation started. What's on your mind?"); sendErr != nil {
 				s.wlog("telegram-worker", "[telegram-worker] failed to send /new confirmation to chat %s: %v", chatIDStr, sendErr)
 			}
@@ -1061,6 +1131,12 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 
 		s.wlog("telegram-worker", "[telegram-worker] user %s bot %s message from chat %s: %s", userID, bot.Label, chatIDStr, workerLogPreview(prompt, 120))
 
+		// ── Load / create conversation for this chat ──────────────────────────
+		convID, convErr := s.getOrCreateTelegramConversation(ctx, userID, chatIDStr)
+		if convErr != nil {
+			s.wlog("telegram-worker", "[telegram-worker] conversation lookup failed: %v", convErr)
+		}
+
 		// ── Typing indicator ─────────────────────────────────────────────────
 		typingDone := make(chan struct{})
 		go func() {
@@ -1077,7 +1153,7 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 			}
 		}()
 
-		orchResult, err := s.runOrchestratorForUser(ctx, "telegram-worker", userID, prompt)
+		orchResult, err := s.runOrchestratorForUserWithHistory(ctx, "telegram-worker", userID, convID, prompt)
 		close(typingDone)
 
 		reply := orchResult.Output
@@ -1090,6 +1166,16 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 
 		if sendErr := s.sendTelegramFormattedReply(ctx, bot.BotToken, msg.Chat.ID, reply); sendErr != nil {
 			s.wlog("telegram-worker", "[telegram-worker] failed to send reply to chat %s: %v", chatIDStr, sendErr)
+		}
+
+		// Persist the turn to the DB so history is available next time
+		if convID != "" {
+			if _, dbErr := s.createMessage(ctx, userID, convID, "user", prompt); dbErr != nil {
+				s.wlog("telegram-worker", "[telegram-worker] failed to persist user message: %v", dbErr)
+			}
+			if _, dbErr := s.createMessage(ctx, userID, convID, "assistant", reply); dbErr != nil {
+				s.wlog("telegram-worker", "[telegram-worker] failed to persist assistant message: %v", dbErr)
+			}
 		}
 	}
 

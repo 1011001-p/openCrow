@@ -96,8 +96,10 @@ export async function api<T = unknown>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
+  // Don't force Content-Type for FormData (browser sets it with boundary automatically)
+  const isFormData = options.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers as Record<string, string>),
   };
 
@@ -869,6 +871,15 @@ export const endpoints = {
       method: "POST",
       body: JSON.stringify(params),
     }),
+
+  // Whisper / Voice
+  getWhisperStatus: () =>
+    api<{ status: "ok" | "downloading" | "down"; model: string }>("/v1/whisper/status"),
+  transcribeAudio: (audioBlob: Blob) => {
+    const form = new FormData();
+    form.append("audio", audioBlob, "recording.webm");
+    return api<{ transcript: string }>("/v1/voice/transcribe", { method: "POST", body: form });
+  },
 
   // Tasks
   listTasks: () => api<{ tasks: TaskDTO[] }>("/v1/tasks"),

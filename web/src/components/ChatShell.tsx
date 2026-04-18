@@ -22,6 +22,10 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function FlagIcon({ className = "" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -174,6 +178,10 @@ export default function ChatShell({
   const [attachedFiles, setAttachedFiles] = useState<{ file: File; dataUrl: string }[]>([]);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const composeRef = useRef<HTMLTextAreaElement>(null);
@@ -256,11 +264,18 @@ export default function ChatShell({
   // ─── Regenerate assistant message ───
   const handleRegenerate = useCallback(async (msgId: string, convId: string) => {
     if (!convId || regeneratingId) return;
+    const targetMessage = messages.find((m) => m.id === msgId);
+    const regenerateAt = targetMessage ? new Date(targetMessage.createdAt).getTime() : null;
     setRegeneratingId(msgId);
     // Replace message content with empty streaming placeholder
     setMessages((prev) =>
       prev.map((m) => (m.id === msgId ? { ...m, content: "" } : m))
     );
+    if (regenerateAt != null) {
+      setToolCallHistory((prev) =>
+        prev.filter((tc) => new Date(tc.createdAt).getTime() < regenerateAt)
+      );
+    }
     try {
       await endpoints.regenerateMessage(convId, msgId, (token) => {
         setMessages((prev) =>
@@ -280,7 +295,7 @@ export default function ChatShell({
     } finally {
       setRegeneratingId(null);
     }
-  }, [regeneratingId]);
+  }, [messages, regeneratingId]);
 
 
   // ─── Send message ───
@@ -387,9 +402,15 @@ export default function ChatShell({
           prev.map((m) => m.id === streamId ? { ...m, content: finalOutput } : m)
         );
       }
-      // Refresh tool calls from server (with proper IDs + outputs)
+      // Refresh persisted messages + tool calls from server (replaces optimistic stream IDs)
       if (conversationId) {
-        endpoints.getToolCalls(conversationId).then((calls) => setToolCallHistory(calls ?? [])).catch(() => {});
+        Promise.all([
+          endpoints.getMessages(conversationId),
+          endpoints.getToolCalls(conversationId),
+        ]).then(([msgs, calls]) => {
+          setMessages(msgs ?? []);
+          setToolCallHistory(calls ?? []);
+        }).catch(() => {});
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -437,6 +458,45 @@ export default function ChatShell({
     },
     [handleSend]
   );
+
+  const handleMic = useCallback(async () => {
+    if (transcribing) return;
+
+    if (recording) {
+      // Stop recording
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+        setTranscribing(true);
+        try {
+          const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          const res = await endpoints.transcribeAudio(blob);
+          if (res.transcript) {
+            setComposing((prev) => (prev ? prev + " " + res.transcript : res.transcript));
+            setTimeout(() => composeRef.current?.focus(), 50);
+          }
+        } catch {
+          // silently ignore transcription errors
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+    } catch {
+      // microphone permission denied or unavailable
+    }
+  }, [recording, transcribing]);
 
   // ─── Render ───
   const activeConversation = conversations.find((conv) => conv.id === activeConversationId) ?? null;
@@ -625,6 +685,7 @@ export default function ChatShell({
                 }
 
                 const isUser = msg.role === "user";
+                const canRegenerate = msg.role === "assistant" && isUuid(msg.id) && !msg.id.startsWith("stream-");
                 return (
                   <div
                     key={msg.id}
@@ -666,14 +727,16 @@ export default function ChatShell({
                           >
                             {copiedId === msg.id ? "copied" : "copy"}
                           </button>
-                          <button
-                            onClick={() => activeConversationId && handleRegenerate(msg.id, activeConversationId)}
-                            disabled={!!regeneratingId}
-                            className="text-xs text-on-surface-variant hover:text-cyan px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors font-mono disabled:opacity-40"
-                            title="Regenerate"
-                          >
-                            {regeneratingId === msg.id ? "..." : "↺ regen"}
-                          </button>
+                          {canRegenerate && (
+                            <button
+                              onClick={() => activeConversationId && handleRegenerate(msg.id, activeConversationId)}
+                              disabled={!!regeneratingId}
+                              className="text-xs text-on-surface-variant hover:text-cyan px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors font-mono disabled:opacity-40"
+                              title="Regenerate"
+                            >
+                              {regeneratingId === msg.id ? "..." : "↺ regen"}
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -764,6 +827,33 @@ export default function ChatShell({
                   className="hidden"
                   onChange={handleFilesPicked}
                 />
+
+                {/* Mic button */}
+                <button
+                  onClick={handleMic}
+                  disabled={transcribing}
+                  className={`mb-0.5 shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors ${
+                    recording
+                      ? "text-error bg-error/10 hover:bg-error/20 animate-pulse"
+                      : transcribing
+                        ? "text-on-surface-variant opacity-50 cursor-wait"
+                        : "text-on-surface-variant hover:text-on-surface hover:bg-surface-mid/50"
+                  }`}
+                  aria-label={recording ? "Stop recording" : "Record voice message"}
+                  title={recording ? "Stop recording" : "Voice input"}
+                >
+                  {transcribing ? (
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" className="animate-spin">
+                      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" strokeDasharray="20 14" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                      <rect x="5" y="1" width="6" height="9" rx="3" stroke="currentColor" strokeWidth="1.5" />
+                      <path d="M2.5 8a5.5 5.5 0 0011 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="8" y1="13.5" x2="8" y2="15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  )}
+                </button>
 
                 <textarea
                   ref={composeRef}

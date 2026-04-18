@@ -252,5 +252,8 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /v1/workers/logs", s.requireAccessToken(http.HandlerFunc(s.handleWorkerLogs)))
 	s.mux.Handle("POST /v1/conversations/{id}/messages/{msgId}/regenerate", s.requireAccessToken(http.HandlerFunc(s.handleRegenerateMessage)))
 
+	s.mux.Handle("GET /v1/whisper/status", s.requireAccessToken(http.HandlerFunc(s.handleWhisperStatus)))
+	s.mux.Handle("POST /v1/voice/transcribe", s.requireAccessToken(http.HandlerFunc(s.handleVoiceTranscribe)))
+
 	s.mux.HandleFunc("GET /v1/feature-split", s.handleFeatureSplit)
 }

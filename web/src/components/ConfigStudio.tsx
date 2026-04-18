@@ -1847,7 +1847,7 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
         .map((p) => ({ value: p.model || p.name, label: `${p.name} . ${p.model || "default"}` })),
     ];
 
-    return (
+  return (
     <div className="space-y-6">
       <SectionHeader title="Heartbeat" description="Autonomous heartbeat configuration" />
       <Card>
@@ -1905,7 +1905,7 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
       )}
 
       {/* Tab bar - glassy */}
-      <div className="rounded-xl border border-gray-300/40 dark:border-white/15 bg-surface-low/80 backdrop-blur-xl shadow-md p-1 overflow-x-auto flex gap-1 ring-1 ring-black/5 dark:ring-white/5">
+      <div className="max-w-6xl mx-auto w-full rounded-xl border border-gray-300/40 dark:border-white/15 bg-surface-low/80 backdrop-blur-xl shadow-md p-1 overflow-x-auto flex gap-1 ring-1 ring-black/5 dark:ring-white/5">
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -1922,7 +1922,7 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
       </div>
 
       {/* Active panel */}
-      <div>{panels[activeTab]()}</div>
+      <div className="max-w-3xl mx-auto w-full">{panels[activeTab]()}</div>
     </div>
   );
 }

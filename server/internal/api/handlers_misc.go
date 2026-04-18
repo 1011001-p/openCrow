@@ -36,7 +36,7 @@ func (s *Server) handleRunServerCommand(w http.ResponseWriter, r *http.Request) 
 		timeout = requested
 	}
 
-	shell := "/bin/bash"
+	shell := resolveShell()
 
 	started := time.Now().UTC()
 	execCtx, cancel := context.WithTimeout(r.Context(), timeout)

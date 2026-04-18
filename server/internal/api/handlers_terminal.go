@@ -22,6 +22,17 @@ var wsUpgrader = websocket.Upgrader{
 	WriteBufferSize: 4096,
 }
 
+// resolveShell returns the best available interactive shell on this system.
+// Prefers bash; falls back to sh if bash is not installed (e.g. Alpine).
+func resolveShell() string {
+	for _, sh := range []string{"/bin/bash", "/usr/bin/bash", "/bin/sh"} {
+		if _, err := os.Stat(sh); err == nil {
+			return sh
+		}
+	}
+	return "/bin/sh"
+}
+
 // terminalSession holds an active PTY session for one user.
 type terminalSession struct {
 	ptmx   *os.File
@@ -128,7 +139,7 @@ func (m *TerminalSessionManager) getOrCreate(userID, shell string) (*terminalSes
 	}
 
 	if shell == "" {
-		shell = "/bin/bash"
+		shell = resolveShell()
 	}
 
 	cmd := exec.Command(shell)
@@ -187,7 +198,7 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromContext(r.Context())
 
 	// Shell is fixed.
-	shell := "/bin/bash"
+	shell := resolveShell()
 
 	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
