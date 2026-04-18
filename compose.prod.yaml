@@ -2,16 +2,17 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: opencrow-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-opencrow}
+      POSTGRES_USER: ${POSTGRES_USER:-opencrow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opencrow}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-opencrow} -d ${POSTGRES_DB:-opencrow}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -19,8 +20,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: opencrow-redis
+    restart: unless-stopped
     ports:
-      - "${REDIS_PORT}:6379"
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -40,7 +42,7 @@ services:
         "-path",
         "/migrations",
         "-database",
-        "${DATABASE_URL}",
+        "${DATABASE_URL:-postgres://opencrow:opencrow@postgres:5432/opencrow?sslmode=disable}",
         "up"
       ]
 
@@ -61,24 +63,26 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
+      target: runtime-prod
     container_name: opencrow-server
-    env_file:
-      - .env
+    restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_ADDR: ${REDIS_ADDR}
-      API_HOST: ${API_HOST}
-      API_PORT: ${API_PORT}
-      APP_ENV: ${APP_ENV}
-      APP_BASE_URL: ${APP_BASE_URL}
-      JWT_ISSUER: ${JWT_ISSUER}
+      DATABASE_URL: ${DATABASE_URL:-postgres://opencrow:opencrow@postgres:5432/opencrow?sslmode=disable}
+      REDIS_ADDR: ${REDIS_ADDR:-redis:6379}
+      API_HOST: ${API_HOST:-0.0.0.0}
+      API_PORT: ${API_PORT:-8080}
+      APP_ENV: ${APP_ENV:-production}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      JWT_ISSUER: ${JWT_ISSUER:-openCrow}
       JWT_SECRET: ${JWT_SECRET}
-      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL}
-      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-720h}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD_BCRYPT: ${ADMIN_PASSWORD_BCRYPT}
+      SERVER_SHELL_TIMEOUT: ${SERVER_SHELL_TIMEOUT:-8s}
       STATE_DIR: /data
       CONFIG_FILE_PATH: /data/config.json
-      SERVER_SHELL_ENABLED: "true"
-      TZ: ${TZ:-UTC}
+      TZ: ${TZ:-Europe/Berlin}
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,7 +93,7 @@ services:
       server-state-init:
         condition: service_completed_successfully
     ports:
-      - "${API_PORT}:8080"
+      - "${API_PORT:-8080}:8080"
     volumes:
       - server_state:/data
 
@@ -97,14 +101,16 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      target: runtime-prod
       args:
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_BASE_URL}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
     container_name: opencrow-web
+    restart: unless-stopped
     env_file:
       - .env
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
       API_INTERNAL_BASE_URL: http://server:8080
     depends_on:
       server:

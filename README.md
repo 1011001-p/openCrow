@@ -10,22 +10,45 @@
 - **Web UI:** Next.js
 - **Infra:** Docker Compose (PostgreSQL + Redis)
 
-## Quick start
+## Quick start (2 compose files)
 
-1. Review env file (already committed for easy local boot):
+Use one of the two compose files depending on your mode.
+
+### Development (`compose.dev.yaml`)
 
 ```bash
-# optional: regenerate from template
+# optional: create local overrides
 # cp .env.example .env
+
+docker compose -f compose.dev.yaml up --build
 ```
 
-2. Start stack:
+What you get in dev:
+- hot-reload for **server** (`CompileDaemon` rebuilds/restarts on `.go` changes)
+- hot-reload for **web** (`next dev` with source mounted from host)
+
+Stop dev stack:
 
 ```bash
-docker compose -f compose.yaml up --build
+docker compose -f compose.dev.yaml down
 ```
 
-3. Open:
+### Production (`compose.prod.yaml`)
+
+```bash
+# optional: create local overrides
+# cp .env.example .env
+
+docker compose -f compose.prod.yaml up --build -d
+```
+
+Stop prod stack:
+
+```bash
+docker compose -f compose.prod.yaml down
+```
+
+### Open
 
 - Web UI: `http://localhost:3000`
 - API health: `http://localhost:8080/healthz`
