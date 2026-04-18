@@ -44,6 +44,7 @@ type ConversationDTO struct {
 	UpdatedAt      string `json:"updatedAt"`
 	IsAutomatic    bool   `json:"isAutomatic,omitempty"`
 	AutomationKind string `json:"automationKind,omitempty"`
+	Channel        string `json:"channel,omitempty"`
 }
 
 type CreateConversationRequest struct {

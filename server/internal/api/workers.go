@@ -933,6 +933,13 @@ func (s *Server) processTelegramBots(ctx context.Context) error {
 			if !bot.Enabled || bot.BotToken == "" {
 				continue
 			}
+			if _, alreadyDone := s.tgRegistered.LoadOrStore(bot.BotToken, struct{}{}); !alreadyDone {
+				if err := s.setTelegramCommands(ctx, bot.BotToken); err != nil {
+					s.wlog("telegram-worker", "[telegram-worker] failed to register commands for bot %s: %v", bot.Label, err)
+				} else {
+					s.wlog("telegram-worker", "[telegram-worker] registered commands for bot %s", bot.Label)
+				}
+			}
 			newLastID, err := s.pollTelegramBot(ctx, userID, bot)
 			if err != nil {
 				s.wlog("telegram-worker", "[telegram-worker] user %s bot %s poll error: %v", userID, bot.Label, err)
@@ -1044,13 +1051,24 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 			continue
 		}
 
+		// Handle /start command
+		if strings.TrimSpace(msg.Text) == "/start" {
+			if sendErr := s.sendTelegramMessage(ctx, bot.BotToken, msg.Chat.ID, "👋 Hi! I'm your personal AI assistant. Just send me a message to get started.\n\nUse /new to clear the conversation history."); sendErr != nil {
+				s.wlog("telegram-worker", "[telegram-worker] failed to send /start reply to chat %s: %v", chatIDStr, sendErr)
+			}
+			continue
+		}
+
 		// Handle /new command -- start a fresh conversation
 		if strings.TrimSpace(msg.Text) == "/new" {
 			s.wlog("telegram-worker", "[telegram-worker] /new command from chat %s -- starting fresh conversation", chatIDStr)
+			if err := s.deleteTelegramConversations(ctx, userID, chatIDStr); err != nil {
+				s.wlog("telegram-worker", "[telegram-worker] failed to delete old conversation for chat %s: %v", chatIDStr, err)
+			}
 			if _, err := s.newTelegramConversation(ctx, userID, chatIDStr); err != nil {
 				s.wlog("telegram-worker", "[telegram-worker] failed to create new conversation: %v", err)
 			}
-			if sendErr := s.sendTelegramMessage(ctx, bot.BotToken, msg.Chat.ID, ":white_check_mark: New conversation started. What's on your mind?"); sendErr != nil {
+			if sendErr := s.sendTelegramMessage(ctx, bot.BotToken, msg.Chat.ID, "👋 New conversation started. What's on your mind?"); sendErr != nil {
 				s.wlog("telegram-worker", "[telegram-worker] failed to send /new confirmation to chat %s: %v", chatIDStr, sendErr)
 			}
 			continue
@@ -1083,7 +1101,7 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 					continue
 				}
 				s.wlog("telegram-worker", "[telegram-worker] voice transcription: %s", workerLogPreview(transcript, 120))
-				promptParts = append(promptParts, "[Voice message transcription]: "+transcript)
+				promptParts = append(promptParts, "🎤 "+transcript)
 			}
 		}
 
@@ -1123,7 +1141,8 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 			promptParts = append(promptParts, textContent)
 		}
 
-		prompt := strings.Join(promptParts, "\n\n")
+		rawPrompt := strings.Join(promptParts, "\n\n")
+		prompt := rawPrompt
 		if from != "" {
 			prompt = fmt.Sprintf("[Telegram from %s]:\n%s", from, prompt)
 		}
@@ -1170,7 +1189,7 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 
 		// Persist the turn to the DB so history is available next time
 		if convID != "" {
-			if _, dbErr := s.createMessage(ctx, userID, convID, "user", prompt); dbErr != nil {
+			if _, dbErr := s.createMessage(ctx, userID, convID, "user", rawPrompt); dbErr != nil {
 				s.wlog("telegram-worker", "[telegram-worker] failed to persist user message: %v", dbErr)
 			}
 			if _, dbErr := s.createMessage(ctx, userID, convID, "assistant", reply); dbErr != nil {
@@ -1223,6 +1242,40 @@ func (s *Server) sendTelegramRaw(ctx context.Context, botToken string, chatID in
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("sendMessage HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// setTelegramCommands registers the bot's command list with Telegram so they
+// appear in the menu button. Called once per bot token.
+func (s *Server) setTelegramCommands(ctx context.Context, botToken string) error {
+	type tgBotCommand struct {
+		Command     string `json:"command"`
+		Description string `json:"description"`
+	}
+	payload := map[string]any{
+		"commands": []tgBotCommand{
+			{Command: "start", Description: "Start chatting with your AI assistant"},
+			{Command: "new", Description: "Clear history and start a fresh conversation"},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/setMyCommands", botToken)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("setMyCommands HTTP %d", resp.StatusCode)
 	}
 	return nil
 }

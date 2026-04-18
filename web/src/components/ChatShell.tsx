@@ -156,12 +156,14 @@ type ChatShellProps = {
   activeConversationId: string | null;
   onActiveConversationChange: (id: string | null) => void;
   onConversationsUpdate: (conversations: ConversationDTO[]) => void;
+  readOnly?: boolean;
 };
 
 export default function ChatShell({
   activeConversationId,
   onActiveConversationChange,
   onConversationsUpdate,
+  readOnly = false,
 }: ChatShellProps) {
   // State
   const [conversations, setConversations] = useState<ConversationDTO[]>([]);
@@ -767,6 +769,13 @@ export default function ChatShell({
           style={{ right: "0" }}
         >
           <div className="w-full max-w-3xl pointer-events-auto">
+          {readOnly ? (
+            <div className="rounded-xl border border-outline-ghost bg-surface-mid/60 backdrop-blur-xl shadow-[var(--shadow-float)] p-3 text-center">
+              <p className="text-xs text-on-surface-variant font-mono">
+                Read-only — replies arrive via Telegram
+              </p>
+            </div>
+          ) : (
             <div className="rounded-xl border border-violet bg-surface-mid backdrop-blur-xl shadow-[var(--shadow-float)] ring-1 ring-violet/20 p-3">
               {/* Provider/model selector row */}
               {providers.length > 0 && (
@@ -884,6 +893,7 @@ export default function ChatShell({
                 </div>
               )}
             </div>
+          )}
           </div>
         </div>
       </div>

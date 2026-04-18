@@ -244,6 +244,8 @@ func applyConversationAutomationMeta(item *ConversationDTO) {
 	case strings.HasPrefix(title, "heartbeat:"):
 		item.IsAutomatic = true
 		item.AutomationKind = "heartbeat"
+	case strings.HasPrefix(title, "[telegram] "):
+		item.Channel = "telegram"
 	}
 }
 
@@ -1213,6 +1215,14 @@ LIMIT 1;
 		return "", fmt.Errorf("telegram: create conversation for chat %s: %w", chatID, err)
 	}
 	return conv.ID, nil
+}
+
+// deleteTelegramConversations removes all conversations for a given Telegram chat.
+func (s *Server) deleteTelegramConversations(ctx context.Context, userID, chatID string) error {
+	title := "[telegram] " + chatID
+	const q = `DELETE FROM conversations WHERE user_id = $1::uuid AND title = $2;`
+	_, err := s.db.Exec(ctx, q, userID, title)
+	return err
 }
 
 // newTelegramConversation forcibly creates a fresh conversation for a Telegram chat,

@@ -38,6 +38,7 @@ type Server struct {
 	termMgr             *TerminalSessionManager
 	skillStore          *SkillStore
 	whisper             *WhisperManager
+	tgRegistered        sync.Map // set of bot tokens that have had commands registered
 }
 
 // WorkerStatusStore tracks runtime health of background workers.

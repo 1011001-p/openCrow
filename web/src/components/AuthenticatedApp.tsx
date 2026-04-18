@@ -99,9 +99,17 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
     terminal: "Sandboxed terminal",
   };
 
-  const visibleConversations = showSystemChats
+  const visibleConversations = (showSystemChats
     ? conversations
-    : conversations.filter((chat) => !chat.isAutomatic || chat.automationKind === "heartbeat");
+    : conversations.filter((chat) => !chat.isAutomatic || chat.automationKind === "heartbeat"))
+    .sort((a, b) => {
+      if (a.channel && !b.channel) return -1;
+      if (!a.channel && b.channel) return 1;
+      return 0;
+    });
+
+  const activeConversation = conversations.find((c) => c.id === activeConversationId);
+  const isReadOnly = !!activeConversation?.channel;
 
   return (
     <div className="h-screen overflow-hidden bg-surface">
@@ -162,21 +170,29 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
                   {visibleConversations.map((chat) => {
                     const isActive = activeSection === "chat" && activeConversationId === chat.id;
                     const isAutomatic = !!chat.isAutomatic;
+                    const isChannel = !!chat.channel;
+                    const displayTitle = isChannel
+                      ? chat.channel!.charAt(0).toUpperCase() + chat.channel!.slice(1)
+                      : chat.title || "Untitled chat";
                     return (
                       <div
                         key={chat.id}
                         className={`group relative flex items-center rounded-sm transition-all ${
-                          isAutomatic
+                          isChannel
                             ? isActive
-                              ? "bg-surface-mid shadow-[inset_0_0_0_1px_var(--color-outline-ghost)]"
+                              ? "bg-surface-mid ring-2 ring-cyan/50 shadow-[0_4px_20px_4px_color-mix(in_srgb,var(--color-cyan)_18%,transparent)]"
                               : "bg-surface-low hover:bg-surface-mid/70"
-                            : isActive
-                              ? "bg-surface-mid"
-                              : "hover:bg-surface-mid/50"
+                            : isAutomatic
+                              ? isActive
+                                ? "bg-surface-mid shadow-[inset_0_0_0_1px_var(--color-outline-ghost)]"
+                                : "bg-surface-low hover:bg-surface-mid/70"
+                              : isActive
+                                ? "bg-surface-mid"
+                                : "hover:bg-surface-mid/50"
                         }`}
                       >
                         <div
-                          className={`absolute inset-y-2 left-0 w-[3px] rounded-r-sm ${isActive ? "bg-violet" : isAutomatic ? "bg-warning/70" : "bg-cyan/70"}`}
+                          className={`absolute inset-y-2 left-0 w-[3px] rounded-r-sm ${isActive ? "bg-violet" : isChannel ? "bg-cyan" : isAutomatic ? "bg-warning/70" : "bg-cyan/70"}`}
                         />
                         <button
                           onClick={() => {
@@ -185,24 +201,38 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
                             setActiveConversationId(chat.id);
                           }}
                           className={`flex-1 min-w-0 px-3 py-2 text-left ${
-                            isAutomatic
+                            isChannel
                               ? isActive
                                 ? "text-on-surface"
                                 : "text-on-surface hover:text-on-surface"
-                              : isActive
-                                ? "text-violet-light"
-                                : "text-on-surface-variant hover:text-on-surface"
+                              : isAutomatic
+                                ? isActive
+                                  ? "text-on-surface"
+                                  : "text-on-surface hover:text-on-surface"
+                                : isActive
+                                  ? "text-violet-light"
+                                  : "text-on-surface-variant hover:text-on-surface"
                           }`}
                         >
                           <div className="flex items-center gap-2">
+                            {isChannel && (
+                              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-cyan">
+                                <path d="M2 5h12v8a1 1 0 01-1 1H3a1 1 0 01-1-1V5zM5 5V3a1 1 0 011-1h4a1 1 0 011 1v2" />
+                              </svg>
+                            )}
                             <p
-                              className={`truncate text-sm font-medium ${isAutomatic ? "text-on-surface" : ""}`}
+                              className={`truncate text-sm font-medium ${isChannel ? "text-on-surface" : isAutomatic ? "text-on-surface" : ""}`}
                             >
-                              {chat.title || "Untitled chat"}
+                              {displayTitle}
                             </p>
                           </div>
                           <div className="mt-1 flex items-center gap-2">
-                            {isAutomatic && (
+                            {isChannel && (
+                              <span className={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider ${isActive ? "bg-cyan/12 text-cyan" : "bg-cyan/10 text-cyan/70"}`}>
+                                pinned · read-only
+                              </span>
+                            )}
+                            {isAutomatic && !isChannel && (
                               <span
                                 className={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider ${
                                   isActive
@@ -320,6 +350,7 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
             activeConversationId={activeConversationId}
             onActiveConversationChange={setActiveConversationId}
             onConversationsUpdate={setConversations}
+            readOnly={isReadOnly}
           />
         ) : activeSection === "overview" ? (
           <div className="flex-1 overflow-y-auto p-8">

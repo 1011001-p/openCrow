@@ -175,6 +175,7 @@ export interface ConversationDTO {
   updatedAt: string;
   isAutomatic?: boolean;
   automationKind?: string;
+  channel?: string;
 }
 
 export interface MessageDTO {
