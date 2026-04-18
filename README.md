@@ -1,15 +1,28 @@
-# openCrow
-
 <p align="center">
   <img src="./crow-animated.svg" alt="openCrow" width="200" />
   <br/>
-  <b>openCrow</b> -
-  <b>Self-hostable multi-device AI assistant platform.</b>
+  <b>openCrow</b>
+  <br/>
+  <i>Self-hostable multi-device AI assistant platform.</i>
 </p>
 
 - **Server:** Go
 - **Web UI:** Next.js
 - **Infra:** Docker Compose (PostgreSQL + Redis)
+
+
+## Features
+
+- **Multi-device** AI gateway
+- **Scheduled** and on-demand **task execution**
+- **Sandboxed tool execution** with Linux shell
+- **Configurable via LLM** and UI with server-side persistence
+- **Email integration** with inbox and send capabilities
+- Access **remote ssh servers** for command execution
+- **Telegram and Signal** integrations for chatting and notifications
+- Chat via voice with **Whisper** speech recognition
+- LLM provider agnostic with built-in support for OpenAI-compatible, OpenAI, OpenRouter, ...
+- Configurable heartbeat agent with custom prompt and scheduling
 
 ## Quick start
 
@@ -36,8 +49,7 @@ docker compose -f compose.dev.yaml down
 ### Production (`compose.yaml`)
 
 ```bash
-# optional: create local overrides
-# cp .env.example .env
+cp .env.example .env
 
 docker compose -f compose.yaml up --build -d
 ```
