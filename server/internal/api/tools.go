@@ -269,6 +269,7 @@ func (s *Server) toolCreateSkill(args map[string]any) (map[string]any, error) {
 		return map[string]any{"success": false, "error": "skill store not available"}, nil
 	}
 	slug, _ := args["slug"].(string)
+	description, _ := args["description"].(string)
 	content, _ := args["content"].(string)
 	if slug == "" {
 		return map[string]any{"success": false, "error": "slug is required"}, nil
@@ -276,8 +277,17 @@ func (s *Server) toolCreateSkill(args map[string]any) (map[string]any, error) {
 	if content == "" {
 		return map[string]any{"success": false, "error": "content is required"}, nil
 	}
-	// Sanitise slug: lowercase, only alphanumeric and hyphens
 	slug = strings.ToLower(strings.TrimSpace(slug))
+	// Inject description into frontmatter if the content doesn't already have one
+	if description != "" && !strings.Contains(content, "description:") {
+		if strings.HasPrefix(strings.TrimSpace(content), "---") {
+			// Insert description into existing frontmatter block
+			content = strings.Replace(content, "---", "---\ndescription: "+description, 1)
+		} else {
+			// Prepend a fresh frontmatter block
+			content = fmt.Sprintf("---\ndescription: %s\n---\n\n", description) + content
+		}
+	}
 	if err := s.skillStore.Save(slug, content); err != nil {
 		return map[string]any{"success": false, "error": err.Error()}, nil
 	}

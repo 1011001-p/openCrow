@@ -24,4 +24,8 @@ for fs in proc dev sys; do
   mountpoint -q "$SANDBOX_DIR/$fs" || mount --bind /$fs "$SANDBOX_DIR/$fs"
 done
 
+# Bind-mount skills directory so the sandbox can read/write skills
+mkdir -p /data/skills "$SANDBOX_DIR/data/skills"
+mountpoint -q "$SANDBOX_DIR/data/skills" || mount --bind /data/skills "$SANDBOX_DIR/data/skills"
+
 exec "$@"
