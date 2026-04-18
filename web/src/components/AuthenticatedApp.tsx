@@ -26,6 +26,7 @@ type SidebarNavButtonProps = {
   section: Section;
   icon: React.ReactNode;
   label: string;
+  tooltip?: string;
   activeSection: Section;
   setActiveSection: (section: Section) => void;
   setRequestedConfigTab: (tab: string | undefined) => void;
@@ -35,6 +36,7 @@ function SidebarNavButton({
   section,
   icon,
   label,
+  tooltip,
   activeSection,
   setActiveSection,
   setRequestedConfigTab,
@@ -46,6 +48,7 @@ function SidebarNavButton({
         if (section === "config") setRequestedConfigTab(undefined);
         setActiveSection(section);
       }}
+      title={tooltip}
       className={`flex w-full items-center gap-3 rounded-sm px-4 py-2.5 text-sm transition-colors duration-150 ${
         active
           ? "text-violet-light"
@@ -93,7 +96,7 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
     chat: "Chat",
     config: "Configuration",
     overview: "Overview",
-    terminal: "Terminal",
+    terminal: "Sandboxed terminal",
   };
 
   const visibleConversations = showSystemChats
@@ -286,7 +289,8 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
           <SidebarNavButton
             section="terminal"
             icon={<TerminalIcon />}
-            label="Terminal"
+            label="Sandboxed terminal"
+            tooltip="Persistent Alpine Linux sandbox used by agents and workers when calling execute_shell_command. Installed packages and files persist across sessions."
             activeSection={activeSection}
             setActiveSection={setActiveSection}
             setRequestedConfigTab={setRequestedConfigTab}
