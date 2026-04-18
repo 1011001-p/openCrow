@@ -70,6 +70,7 @@ type CreateMessageRequest struct {
 type ToolCallRecord struct {
 	ID         string         `json:"id"`
 	ToolName   string         `json:"toolName"`
+	Kind       string         `json:"kind,omitempty"`
 	Arguments  map[string]any `json:"arguments"`
 	Output     *string        `json:"output"`
 	Error      *string        `json:"error,omitempty"`

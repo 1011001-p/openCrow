@@ -51,6 +51,22 @@ func (s *Store) GetUserConfig(userID string) (UserConfig, error) {
 	return normalize(cfg), nil
 }
 
+func (s *Store) ListUserIDs() ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	root, err := s.loadLocked()
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(root.Users))
+	for id := range root.Users {
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
 func (s *Store) PutUserConfig(userID string, cfg UserConfig) (UserConfig, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -216,6 +232,20 @@ func normalize(cfg UserConfig) UserConfig {
 			cfg.Integrations.EmailAccounts[i].SmtpPort = 587
 		}
 	}
+	if cfg.Integrations.TelegramBots == nil {
+		cfg.Integrations.TelegramBots = []TelegramBotConfig{}
+	}
+	for i := range cfg.Integrations.TelegramBots {
+		if cfg.Integrations.TelegramBots[i].ID == "" {
+			cfg.Integrations.TelegramBots[i].ID = uuid.NewString()
+		}
+		if cfg.Integrations.TelegramBots[i].AllowedChatIDs == nil {
+			cfg.Integrations.TelegramBots[i].AllowedChatIDs = []string{}
+		}
+		if cfg.Integrations.TelegramBots[i].PollIntervalSeconds <= 0 {
+			cfg.Integrations.TelegramBots[i].PollIntervalSeconds = 5
+		}
+	}
 
 	if cfg.LLM.Providers == nil {
 		cfg.LLM.Providers = []ProviderConfig{}
@@ -271,9 +301,6 @@ func normalize(cfg UserConfig) UserConfig {
 		}
 	}
 
-	if cfg.LinuxSandbox.Shell == "" {
-		cfg.LinuxSandbox.Shell = def.LinuxSandbox.Shell
-	}
 	if cfg.Heartbeat.IntervalSeconds <= 0 {
 		cfg.Heartbeat.IntervalSeconds = def.Heartbeat.IntervalSeconds
 	}
@@ -286,6 +313,9 @@ func normalize(cfg UserConfig) UserConfig {
 	if cfg.Heartbeat.ActiveHours.TZ == "" {
 		cfg.Heartbeat.ActiveHours.TZ = def.Heartbeat.ActiveHours.TZ
 	}
+
+	// Linux sandbox is now always on.
+	cfg.LinuxSandbox.Enabled = true
 
 	if cfg.Prompts.SystemPrompt == "" {
 		cfg.Prompts.SystemPrompt = def.Prompts.SystemPrompt

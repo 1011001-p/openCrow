@@ -186,13 +186,8 @@ type ptyResizeMsg struct {
 func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromContext(r.Context())
 
-	// Determine shell from user config
+	// Shell is fixed.
 	shell := "/bin/bash"
-	if s.configStore != nil {
-		if cfg, err := s.configStore.GetUserConfig(userID); err == nil && cfg.LinuxSandbox.Shell != "" {
-			shell = cfg.LinuxSandbox.Shell
-		}
-	}
 
 	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {

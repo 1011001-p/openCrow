@@ -21,6 +21,7 @@ import {
   type MCPToolSummary,
   type MCPServerTestResult,
   type ProviderModelsProbeResult,
+  type TelegramBotConfig,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -39,6 +40,7 @@ import { IconButton } from "@/components/ui/IconButton";
 
 const TABS = [
   { key: "email", label: "Email" },
+  { key: "channels", label: "Channels" },
   { key: "tools", label: "Tools" },
   { key: "skills", label: "Skills" },
   { key: "mcp", label: "MCP" },
@@ -168,11 +170,14 @@ function McpServerCard({
   index: number;
   updateConfig: UpdateConfigFn;
 }) {
+  const configured = !!(server.url.trim());
+  const [expanded, setExpanded] = useState(!configured);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<MCPServerTestResult | null>(null);
   const [tools, setTools] = useState<MCPToolSummary[]>([]);
 
-  const handleTest = async () => {
+  const handleTest = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     if (!server.url.trim()) {
       setTestResult({ ok: false, latencyMs: 0, error: "Server URL is required" });
       return;
@@ -195,172 +200,156 @@ function McpServerCard({
     }
   };
 
+  // Auto-test when tab opens (component mounts with a configured URL)
+  useEffect(() => {
+    if (server.url.trim()) handleTest();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const headerRows = Object.entries(server.headers ?? {});
 
   return (
-    <Card key={server.id ?? i} title={server.name || `MCP Server ${i + 1}`}>
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Name"
-            value={server.name}
-            onChange={(e) => updateConfig((c) => {
-              c.mcp.servers[i].name = e.target.value;
-              return c;
-            })}
-            placeholder="My MCP"
-          />
-          <Input
-            label="Server URL"
-            value={server.url}
-            onChange={(e) => updateConfig((c) => {
-              c.mcp.servers[i].url = e.target.value;
-              return c;
-            })}
-            placeholder="https://example.com/mcp"
-          />
-        </div>
+    <div className="rounded-lg border border-white/10 bg-surface-mid overflow-hidden">
+      {/* Header row */}
+      <button
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <AnimatedDot status={testing ? "pending" : testResult ? (testResult.ok ? "ok" : "error") : (server.enabled ? "ok" : "idle")} />
+        <span className="font-medium text-sm flex-1 truncate">{server.name || `MCP Server ${i + 1}`}</span>
+        {server.url && <span className="text-xs text-on-surface-variant truncate hidden sm:block max-w-[200px]">{server.url}</span>}
+        {testResult && (
+          <span className={`flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded ${testResult.ok ? "text-cyan bg-cyan/10" : "text-error bg-error/10"}`}>
+            <AnimatedDot status={testResult.ok ? "ok" : "error"} />
+            {testResult.ok ? `OK . ${testResult.latencyMs}ms` : "FAIL"}
+          </span>
+        )}
+        <svg className={`w-4 h-4 text-on-surface-variant transition-transform flex-shrink-0 ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs uppercase tracking-wide text-on-surface-variant">Headers</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => updateConfig((c) => {
-                const current = c.mcp.servers[i].headers ?? {};
-                c.mcp.servers[i].headers = { ...current, "": "" };
-                return c;
-              })}
-            >
-              Add Header
-            </Button>
+      {/* Expanded content */}
+      {expanded && (
+        <div className="px-4 pb-4 space-y-4 border-t border-white/10 pt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Name"
+              value={server.name}
+              onChange={(e) => updateConfig((c) => { c.mcp.servers[i].name = e.target.value; return c; })}
+              placeholder="My MCP"
+            />
+            <Input
+              label="Server URL"
+              value={server.url}
+              onChange={(e) => updateConfig((c) => { c.mcp.servers[i].url = e.target.value; return c; })}
+              placeholder="https://example.com/mcp"
+            />
           </div>
 
-          {headerRows.length === 0 && (
-            <p className="text-xs text-on-surface-variant">No custom headers configured.</p>
-          )}
-
-          {headerRows.map(([key, value], hi) => (
-            <div key={`header-${i}-${hi}`} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
-              <Input
-                label="Key"
-                value={key}
-                onChange={(e) => updateConfig((c) => {
-                  const rows = Object.entries(c.mcp.servers[i].headers ?? {});
-                  const next: Record<string, string> = {};
-                  rows.forEach(([k, v], idx) => {
-                    if (idx === hi) {
-                      next[e.target.value] = v;
-                    } else {
-                      next[k] = v;
-                    }
-                  });
-                  c.mcp.servers[i].headers = next;
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-wide text-on-surface-variant">Headers</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => updateConfig((c) => {
+                  const current = c.mcp.servers[i].headers ?? {};
+                  c.mcp.servers[i].headers = { ...current, "": "" };
                   return c;
                 })}
-                placeholder="Authorization"
-              />
-              <Input
-                label="Value"
-                value={value}
-                onChange={(e) => updateConfig((c) => {
-                  const rows = Object.entries(c.mcp.servers[i].headers ?? {});
-                  const next: Record<string, string> = {};
-                  rows.forEach(([k, v], idx) => {
-                    if (idx === hi) {
-                      next[k] = e.target.value;
-                    } else {
-                      next[k] = v;
-                    }
-                  });
-                  c.mcp.servers[i].headers = next;
-                  return c;
-                })}
-                placeholder="Bearer ..."
-              />
-              <div className="flex items-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="hover:text-error"
-                  onClick={() => updateConfig((c) => {
+              >
+                Add Header
+              </Button>
+            </div>
+            {headerRows.length === 0 && (
+              <p className="text-xs text-on-surface-variant">No custom headers configured.</p>
+            )}
+            {headerRows.map(([key, value], hi) => (
+              <div key={`header-${i}-${hi}`} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+                <Input
+                  label="Key"
+                  value={key}
+                  onChange={(e) => updateConfig((c) => {
                     const rows = Object.entries(c.mcp.servers[i].headers ?? {});
                     const next: Record<string, string> = {};
-                    rows.forEach(([k, v], idx) => {
-                      if (idx !== hi) next[k] = v;
-                    });
+                    rows.forEach(([k, v], idx) => { next[idx === hi ? e.target.value : k] = v; });
                     c.mcp.servers[i].headers = next;
                     return c;
                   })}
-                >
-                  Remove
-                </Button>
+                  placeholder="Authorization"
+                />
+                <Input
+                  label="Value"
+                  value={value}
+                  onChange={(e) => updateConfig((c) => {
+                    const rows = Object.entries(c.mcp.servers[i].headers ?? {});
+                    const next: Record<string, string> = {};
+                    rows.forEach(([k, v], idx) => { next[k] = idx === hi ? e.target.value : v; });
+                    c.mcp.servers[i].headers = next;
+                    return c;
+                  })}
+                  placeholder="Bearer ..."
+                />
+                <div className="flex items-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="hover:text-error"
+                    onClick={() => updateConfig((c) => {
+                      const rows = Object.entries(c.mcp.servers[i].headers ?? {});
+                      const next: Record<string, string> = {};
+                      rows.forEach(([k, v], idx) => { if (idx !== hi) next[k] = v; });
+                      c.mcp.servers[i].headers = next;
+                      return c;
+                    })}
+                  >
+                    Remove
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-4 flex-wrap">
-          <Toggle
-            label="Enabled"
-            checked={server.enabled}
-            onChange={(v) => updateConfig((c) => {
-              c.mcp.servers[i].enabled = v;
-              return c;
-            })}
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={testing}
-            onClick={handleTest}
-            disabled={!server.url.trim()}
-          >
-            Test connection
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto hover:text-error"
-            onClick={() => updateConfig((c) => {
-              c.mcp.servers.splice(i, 1);
-              return c;
-            })}
-          >
-            Remove Server
-          </Button>
-        </div>
-
-        {testResult && (
-          <div className={`rounded-lg px-3 py-2 text-sm border ${testResult.ok ? "bg-green-400/10 text-green-400 border-green-400/20" : "bg-red-400/10 text-red-400 border-red-400/20"}`}>
-            <div className="flex items-center gap-2">
-              <span>{testResult.ok ? "Connected" : "Failed"}</span>
-              <span className="text-xs opacity-80">{testResult.latencyMs}ms</span>
-            </div>
-            {testResult.error && <p className="text-xs mt-1 opacity-90 break-all">{testResult.error}</p>}
+            ))}
           </div>
-        )}
 
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-wide text-on-surface-variant">Exposed Tools</p>
-          {tools.length === 0 ? (
-            <p className="text-xs text-on-surface-variant">Run test to fetch MCP tools.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {tools.map((tool) => (
-                <Chip key={tool.name} className="bg-violet/12 text-violet">
-                  {tool.name}
-                </Chip>
-              ))}
+          {testResult && (
+            <div className={`rounded-lg px-3 py-2 text-sm border ${testResult.ok ? "bg-cyan/10 text-cyan border-cyan/20" : "bg-error/10 text-error border-error/20"}`}>
+              <div className="flex items-center gap-2">
+                <span>{testResult.ok ? "Connected" : "Failed"}</span>
+                <span className="text-xs opacity-80">{testResult.latencyMs}ms</span>
+              </div>
+              {testResult.error && <p className="text-xs mt-1 opacity-90 break-all">{testResult.error}</p>}
             </div>
           )}
+
+          {tools.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wide text-on-surface-variant">Exposed Tools</p>
+              <div className="flex flex-wrap gap-2">
+                {tools.map((tool) => (
+                  <Chip key={tool.name} className="bg-violet/12 text-violet">{tool.name}</Chip>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <Toggle
+              label="Enabled"
+              checked={server.enabled}
+              onChange={(v) => updateConfig((c) => { c.mcp.servers[i].enabled = v; return c; })}
+            />
+            <Button variant="secondary" size="sm" loading={testing} onClick={handleTest} disabled={!server.url.trim()} className="ml-4">
+              Test connection
+            </Button>
+            <Button variant="ghost" size="sm" className="ml-auto hover:text-error" onClick={() => updateConfig((c) => { c.mcp.servers.splice(i, 1); return c; })}>
+              Remove
+            </Button>
+          </div>
         </div>
-      </div>
-    </Card>
+      )}
+    </div>
   );
 }
-
 // ─── Save Bar ───
 
 function SaveBar({
@@ -657,8 +646,8 @@ function EmailAccountCard({
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string; detail?: string } | null>(null);
 
-  const handleTest = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleTest = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setTesting(true);
     setTestResult(null);
     try {
@@ -677,6 +666,12 @@ function EmailAccountCard({
     }
   };
 
+  // Auto-test when tab opens (component mounts with IMAP credentials)
+  useEffect(() => {
+    if (acct.imapHost && acct.imapUsername) handleTest();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="rounded-lg border border-white/10 bg-surface-mid overflow-hidden">
       {/* Header row */}
@@ -684,7 +679,7 @@ function EmailAccountCard({
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
-        <AnimatedDot status={acct.enabled ? "ok" : "idle"} />
+        <AnimatedDot status={testing ? "pending" : testResult ? (testResult.ok ? "ok" : "error") : (acct.enabled ? "ok" : "idle")} />
         <span className="font-medium text-sm flex-1 truncate">{acct.label || `Account ${i + 1}`}</span>
         {acct.address && <span className="text-xs text-on-surface-variant truncate hidden sm:block">{acct.address}</span>}
         {testResult && (
@@ -977,6 +972,145 @@ function EmailTab({
         <p className="text-on-surface-variant text-sm">No email accounts configured.</p>
       )}
       <SaveBar onClick={saveFullConfig} loading={saving} label="Save Email Config" status={saveStatus} />
+    </div>
+  );
+}
+
+function TelegramBotCard({
+  bot,
+  index: i,
+  updateConfig,
+}: {
+  bot: TelegramBotConfig;
+  index: number;
+  updateConfig: UpdateConfigFn;
+}) {
+  const configured = !!(bot.botToken);
+  const [expanded, setExpanded] = useState(!configured);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; latencyMs?: number; error?: string; detail?: string } | null>(null);
+
+  const handleTest = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!bot.botToken) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await endpoints.testTelegramBot({ botToken: bot.botToken, notificationChatId: bot.notificationChatId || undefined });
+      setTestResult(res);
+    } catch {
+      setTestResult({ ok: false, error: "Request failed" });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  // Auto-test when tab opens (component mounts with a configured token)
+  useEffect(() => {
+    if (bot.botToken) handleTest();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-surface-mid overflow-hidden">
+      {/* Compact header */}
+      <button
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <AnimatedDot status={testing ? "pending" : testResult ? (testResult.ok ? "ok" : "error") : (bot.enabled ? "ok" : "idle")} />
+        <span className="font-medium text-sm flex-1 truncate">{bot.label || `Bot ${i + 1}`}</span>
+        {bot.botToken && <span className="text-xs text-on-surface-variant font-mono hidden sm:block">token set</span>}
+        {testResult && (
+          <span className={`flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded ${testResult.ok ? "text-cyan bg-cyan/10" : "text-error bg-error/10"}`}>
+            <AnimatedDot status={testResult.ok ? "ok" : "error"} />
+            {testResult.ok ? "OK" : "FAIL"}
+          </span>
+        )}
+        <svg className={`w-4 h-4 text-on-surface-variant transition-transform flex-shrink-0 ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="px-4 pb-4 space-y-4 border-t border-white/10 pt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input label="Label" value={bot.label} onChange={(e) => updateConfig((c) => { c.integrations.telegramBots[i].label = e.target.value; return c; })} />
+            <Input label="Bot Token" type="password" value={bot.botToken} onChange={(e) => updateConfig((c) => { c.integrations.telegramBots[i].botToken = e.target.value; return c; })} />
+            <Input label="Notification Chat ID" value={bot.notificationChatId} onChange={(e) => updateConfig((c) => { c.integrations.telegramBots[i].notificationChatId = e.target.value; return c; })} />
+            <Input label="Poll Interval (seconds)" type="number" value={bot.pollIntervalSeconds} onChange={(e) => updateConfig((c) => { c.integrations.telegramBots[i].pollIntervalSeconds = parseInt(e.target.value) || 5; return c; })} />
+          </div>
+          <Input
+            label="Allowed Chat IDs (comma-separated)"
+            value={bot.allowedChatIds.join(", ")}
+            onChange={(e) => updateConfig((c) => {
+              c.integrations.telegramBots[i].allowedChatIds = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+              return c;
+            })}
+          />
+          {testResult && (
+            <div className={`rounded-lg px-3 py-2 text-sm border ${testResult.ok ? "bg-cyan/10 text-cyan border-cyan/20" : "bg-error/10 text-error border-error/20"}`}>
+              <div className="flex items-center gap-2">
+                <span>{testResult.ok ? "Connected" : "Failed"}</span>
+                {testResult.latencyMs != null && <span className="text-xs opacity-80">{testResult.latencyMs}ms</span>}
+              </div>
+              {testResult.detail && <p className="text-xs mt-1 opacity-90">{testResult.detail}</p>}
+              {testResult.error && <p className="text-xs mt-1 opacity-90">{testResult.error}</p>}
+            </div>
+          )}
+          <div className="flex gap-2 pt-2 items-center">
+            <Toggle label="Enabled" checked={bot.enabled} onChange={(v) => updateConfig((c) => { c.integrations.telegramBots[i].enabled = v; return c; })} />
+            <Button variant="secondary" size="sm" loading={testing} onClick={handleTest} disabled={!bot.botToken} className="ml-4">
+              Test bot
+            </Button>
+            <Button variant="ghost" size="sm" className="ml-auto hover:text-error" onClick={() => updateConfig((c) => { c.integrations.telegramBots.splice(i, 1); return c; })}>
+              Remove
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TelegramTab({
+  config,
+  updateConfig,
+  saving,
+  saveFullConfig,
+  saveStatus,
+}: {
+  config: UserConfig;
+  updateConfig: UpdateConfigFn;
+  saving: boolean;
+  saveFullConfig: () => void;
+  saveStatus: string | null;
+}) {
+  return (
+    <div className="space-y-6">
+      <SectionHeader
+        title="Telegram Bots"
+        description="Connect Telegram bots for chat and notifications"
+        action={
+          <Button variant="secondary" size="sm" onClick={() => updateConfig((c) => {
+            c.integrations.telegramBots.push({
+              label: "", botToken: "", allowedChatIds: [],
+              notificationChatId: "", enabled: true, pollIntervalSeconds: 5,
+            });
+            return c;
+          })}>
+            Add Bot
+          </Button>
+        }
+      />
+      {config.integrations.telegramBots.map((bot, i) => (
+        <TelegramBotCard key={i} bot={bot} index={i} updateConfig={updateConfig} />
+      ))}
+      {config.integrations.telegramBots.length === 0 && (
+        <p className="text-on-surface-variant text-sm">No Telegram bots configured.</p>
+      )}
+      <SaveBar onClick={saveFullConfig} loading={saving} label="Save Telegram Config" status={saveStatus} />
     </div>
   );
 }
@@ -1489,6 +1623,7 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
   );
 
   const renderEmail = () => <EmailTab config={config} updateConfig={updateConfig} saving={saving} saveFullConfig={saveFullConfig} saveStatus={saveStatus} setError={setError} />;
+  const renderTelegram = () => <TelegramTab config={config} updateConfig={updateConfig} saving={saving} saveFullConfig={saveFullConfig} saveStatus={saveStatus} />;
 
   const renderHeartbeat = () => {
     const providerOptions = [
@@ -1529,6 +1664,7 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
 
   const panels: Record<string, () => ReactElement> = {
     email: renderEmail,
+    channels: renderTelegram,
     tools: renderTools,
     skills: renderSkills,
     mcp: renderMCP,

@@ -62,56 +62,28 @@ function linkifyPlainUrls(content: string): string {
   });
 }
 
-type SetupFormType = "email_setup" | "mcp_setup";
-
-type SetupFormPayload = {
-  form: SetupFormType;
-  id?: string;
-  title?: string;
-  description?: string;
-  submitLabel?: string;
-  defaults?: Record<string, string | number | boolean>;
-};
-
-type RichMessagePart =
-  | { kind: "markdown"; content: string }
-  | { kind: "setup-form"; payload: SetupFormPayload };
-
-function parseSetupForms(content: string): RichMessagePart[] {
-  const re = /```(?:setup-form|setup_form)\s*([\s\S]*?)```/gi;
-  let parts: RichMessagePart[] = [];
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    if (m.index > last) {
-      parts = parts.concat({ kind: "markdown", content: content.slice(last, m.index) });
-    }
-    const raw = (m[1] ?? "").trim();
+function displayValue(value: unknown): { text: string; isJson: boolean } {
+  if (value == null) return { text: "", isJson: false };
+  if (typeof value === "object") {
     try {
-      const parsed = JSON.parse(raw) as SetupFormPayload;
-      if (parsed && (parsed.form === "email_setup" || parsed.form === "mcp_setup")) {
-        parts = parts.concat({ kind: "setup-form", payload: parsed });
-      } else {
-        parts = parts.concat({ kind: "markdown", content: m[0] });
-      }
+      return { text: JSON.stringify(value, null, 2), isJson: true };
     } catch {
-      parts = parts.concat({ kind: "markdown", content: m[0] });
+      return { text: String(value), isJson: false };
     }
-    last = re.lastIndex;
   }
-  if (last < content.length) {
-    parts = parts.concat({ kind: "markdown", content: content.slice(last) });
+
+  const text = String(value);
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed !== null && typeof parsed === "object") {
+      return { text: JSON.stringify(parsed, null, 2), isJson: true };
+    }
+    return { text, isJson: false };
+  } catch {
+    return { text, isJson: false };
   }
-  if (parts.length === 0) return [{ kind: "markdown", content }];
-  return parts;
 }
 
-function setupFormKey(payload: SetupFormPayload, idx: number, messageId: string): string {
-  if (payload.id && String(payload.id).trim()) return `setup-form-${messageId}-${payload.id}`;
-  const title = String(payload.title ?? "").trim();
-  const kind = payload.form;
-  return `setup-form-${messageId}-${kind}-${title || idx}`;
-}
 
 function MarkdownMessage({ content, compact = false }: { content: string; compact?: boolean }) {
   return (
@@ -147,242 +119,6 @@ function MarkdownMessage({ content, compact = false }: { content: string; compac
   );
 }
 
-function RichAssistantContent({
-  content,
-  compact = false,
-  messageId,
-  conversationId,
-  onSubmitSetupForm,
-  hiddenForms,
-  onHideForm,
-}: {
-  content: string;
-  compact?: boolean;
-  messageId: string;
-  conversationId: string | null;
-  onSubmitSetupForm: (followupMessage: string) => Promise<void>;
-  hiddenForms: Set<string>;
-  onHideForm: (formId: string) => void;
-}) {
-  const parts = parseSetupForms(content);
-  return (
-    <>
-      {parts.map((part, idx) => {
-        if (part.kind === "setup-form") {
-          const formId = setupFormKey(part.payload, idx, messageId);
-          if (hiddenForms.has(formId)) return null;
-          return (
-            <SetupForm
-              key={formId}
-              formId={formId}
-              payload={part.payload}
-              conversationId={conversationId}
-              onSubmitSetupForm={onSubmitSetupForm}
-              onHideForm={onHideForm}
-            />
-          );
-        }
-        return <MarkdownMessage key={`md-${idx}`} content={part.content} compact={compact} />;
-      })}
-    </>
-  );
-}
-
-function parseBool(value: string): boolean {
-  const v = String(value ?? "").trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes" || v === "on";
-}
-
-function parseIntWithDefault(value: string, fallback: number): number {
-  const n = Number.parseInt(String(value ?? "").trim(), 10);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
-
-function parseHeadersFromText(value: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of value.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const idx = trimmed.indexOf(":");
-    if (idx <= 0) continue;
-    const key = trimmed.slice(0, idx).trim();
-    const val = trimmed.slice(idx + 1).trim();
-    if (key) out[key] = val;
-  }
-  return out;
-}
-
-function buildSetupFormFollowupMessage(payload: SetupFormPayload, values: Record<string, string>): string {
-  if (payload.form === "email_setup") {
-    return [
-      "Setup form submitted and saved.",
-      "Please continue the email integration now using the saved config.",
-      "",
-      `Account label: ${values.label?.trim() || "(none)"}`,
-      `Address: ${values.address?.trim() || "(none)"}`,
-      `IMAP host: ${values.imapHost?.trim() || "(none)"}:${values.imapPort?.trim() || "993"}`,
-      `SMTP host: ${values.smtpHost?.trim() || "(none)"}:${values.smtpPort?.trim() || "587"}`,
-      `TLS: ${values.tls?.trim() || "true"}`,
-      `Enabled: ${values.enabled?.trim() || "true"}`,
-      "",
-      "Do not ask for the same setup fields again unless strictly required.",
-    ].join("\n");
-  }
-
-  return [
-    "Setup form submitted and saved.",
-    "Please continue MCP setup now using the saved config.",
-    "",
-    `Server name: ${values.name?.trim() || "(none)"}`,
-    `URL: ${values.url?.trim() || "(none)"}`,
-    `Enabled: ${values.enabled?.trim() || "true"}`,
-    "",
-    "Test discovery/capabilities and proceed without asking for the same setup fields again unless strictly required.",
-  ].join("\n");
-}
-
-function SetupForm({
-  formId,
-  payload,
-  conversationId,
-  onSubmitSetupForm,
-  onHideForm,
-}: {
-  formId: string;
-  payload: SetupFormPayload;
-  conversationId: string | null;
-  onSubmitSetupForm: (followupMessage: string) => Promise<void>;
-  onHideForm: (formId: string) => void;
-}) {
-  const defaults = payload.defaults ?? {};
-  const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<string>("");
-  const [values, setValues] = useState<Record<string, string>>(() => {
-    const out: Record<string, string> = {};
-    if (payload.form === "email_setup") {
-      out.label = String(defaults.label ?? "");
-      out.address = String(defaults.address ?? "");
-      out.imapHost = String(defaults.imapHost ?? "");
-      out.imapPort = String(defaults.imapPort ?? "993");
-      out.imapUsername = String(defaults.imapUsername ?? "");
-      out.imapPassword = String(defaults.imapPassword ?? "");
-      out.smtpHost = String(defaults.smtpHost ?? "");
-      out.smtpPort = String(defaults.smtpPort ?? "587");
-      out.tls = String(defaults.tls ?? "true");
-      out.enabled = String(defaults.enabled ?? "true");
-      return out;
-    }
-    out.name = String(defaults.name ?? "");
-    out.url = String(defaults.url ?? "");
-    out.enabled = String(defaults.enabled ?? "true");
-    out.headers = String(defaults.headers ?? "");
-    out.authorization = String(defaults.authorization ?? "");
-    return out;
-  });
-
-  const setField = (key: string, val: string) => {
-    setValues((prev) => ({ ...prev, [key]: val }));
-  };
-
-  const submit = async () => {
-    setSaving(true);
-    setStatus("");
-    try {
-      const cfg = await endpoints.getConfig();
-      if (payload.form === "email_setup") {
-        const account = {
-          label: values.label.trim(),
-          address: values.address.trim(),
-          imapHost: values.imapHost.trim(),
-          imapPort: parseIntWithDefault(values.imapPort, 993),
-          imapUsername: values.imapUsername.trim(),
-          imapPassword: values.imapPassword,
-          smtpHost: values.smtpHost.trim(),
-          smtpPort: parseIntWithDefault(values.smtpPort, 587),
-          tls: parseBool(values.tls),
-          enabled: parseBool(values.enabled),
-        };
-        if (!account.address || !account.imapHost || !account.smtpHost) {
-          throw new Error("address, imapHost and smtpHost are required");
-        }
-        const idx = cfg.integrations.emailAccounts.findIndex((a) => a.address.toLowerCase() === account.address.toLowerCase());
-        if (idx >= 0) cfg.integrations.emailAccounts[idx] = { ...cfg.integrations.emailAccounts[idx], ...account };
-        else cfg.integrations.emailAccounts.push(account);
-      } else {
-        const name = values.name.trim();
-        const url = values.url.trim();
-        if (!name || !url) throw new Error("name and url are required");
-        const headers = parseHeadersFromText(values.headers);
-        if (values.authorization.trim()) {
-          headers.Authorization = values.authorization.trim();
-        }
-        const server = {
-          name,
-          url,
-          enabled: parseBool(values.enabled),
-          headers,
-        };
-        const idx = cfg.mcp.servers.findIndex((s) => s.name.toLowerCase() === name.toLowerCase() || s.url === url);
-        if (idx >= 0) cfg.mcp.servers[idx] = { ...cfg.mcp.servers[idx], ...server };
-        else cfg.mcp.servers.push(server);
-      }
-      await endpoints.putConfig(cfg);
-
-      if (conversationId) {
-        setStatus("Saved. Asking assistant to continue...");
-        await onSubmitSetupForm(buildSetupFormFollowupMessage(payload, values));
-      }
-
-      try {
-        window.localStorage.setItem(`oc:setup-form:hidden:${formId}`, "1");
-      } catch {
-        // ignore localStorage failures
-      }
-      onHideForm(formId);
-      setStatus("Saved :white_check_mark:");
-    } catch (e) {
-      setStatus(e instanceof Error ? `Failed: ${e.message}` : "Failed to save");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="rounded-xl border p-3 my-2 border-violet/30 bg-violet/8">
-      <p className="text-xs uppercase tracking-wide text-violet font-mono">Setup Form</p>
-      <p className="text-sm font-semibold text-on-surface mt-1">{payload.title || (payload.form === "email_setup" ? "Email Setup" : "MCP Setup")}</p>
-      {payload.description && <p className="text-xs text-on-surface-variant mt-1">{payload.description}</p>}
-
-      {payload.form === "email_setup" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="Label" value={values.label} onChange={(e) => setField("label", e.target.value)} />
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="Address" value={values.address} onChange={(e) => setField("address", e.target.value)} />
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="IMAP Host" value={values.imapHost} onChange={(e) => setField("imapHost", e.target.value)} />
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="IMAP Port" value={values.imapPort} onChange={(e) => setField("imapPort", e.target.value)} />
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="IMAP Username" value={values.imapUsername} onChange={(e) => setField("imapUsername", e.target.value)} />
-          <input type="password" className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="IMAP Password" value={values.imapPassword} onChange={(e) => setField("imapPassword", e.target.value)} />
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="SMTP Host" value={values.smtpHost} onChange={(e) => setField("smtpHost", e.target.value)} />
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="SMTP Port" value={values.smtpPort} onChange={(e) => setField("smtpPort", e.target.value)} />
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="TLS (true/false)" value={values.tls} onChange={(e) => setField("tls", e.target.value)} />
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="Enabled (true/false)" value={values.enabled} onChange={(e) => setField("enabled", e.target.value)} />
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-2 mt-3">
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="Name" value={values.name} onChange={(e) => setField("name", e.target.value)} />
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="URL" value={values.url} onChange={(e) => setField("url", e.target.value)} />
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="Authorization header value (e.g. Bearer ... )" value={values.authorization} onChange={(e) => setField("authorization", e.target.value)} />
-          <textarea className="bg-surface-mid rounded px-2 py-1 text-sm min-h-[72px]" placeholder={"Extra headers, one per line\nKey: Value"} value={values.headers} onChange={(e) => setField("headers", e.target.value)} />
-          <input className="bg-surface-mid rounded px-2 py-1 text-sm" placeholder="Enabled (true/false)" value={values.enabled} onChange={(e) => setField("enabled", e.target.value)} />
-        </div>
-      )}
-
-      <div className="mt-3 flex items-center gap-2">
-        <Button type="button" size="sm" onClick={submit} loading={saving}>{payload.submitLabel || "Save"}</Button>
-        {status && <span className="text-xs text-on-surface-variant">{status}</span>}
-      </div>
-    </div>
-  );
-}
 
 // ─── Message Content Renderer ───
 function renderMessageContent(content: string) {
@@ -436,8 +172,6 @@ export default function ChatShell({
   const [attachedFiles, setAttachedFiles] = useState<{ file: File; dataUrl: string }[]>([]);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [setupFormBusy, setSetupFormBusy] = useState(false);
-  const [hiddenSetupForms, setHiddenSetupForms] = useState<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const composeRef = useRef<HTMLTextAreaElement>(null);
@@ -546,109 +280,6 @@ export default function ChatShell({
     }
   }, [regeneratingId]);
 
-  const handleSetupFormSubmitted = useCallback(async (followupMessage: string) => {
-    if (!activeConversationId) throw new Error("No active conversation");
-    if (sending || setupFormBusy) throw new Error("Please wait for the current response to finish");
-
-    setSetupFormBusy(true);
-    const conversationId = activeConversationId;
-    const optimisticUser: MessageDTO = {
-      id: `temp-setup-${Date.now()}`,
-      conversationId,
-      role: "user",
-      content: followupMessage,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, optimisticUser]);
-
-    try {
-      const savedUser = await endpoints.createMessage(conversationId, "user", followupMessage);
-      setMessages((prev) => prev.map((m) => (m.id === optimisticUser.id ? savedUser : m)));
-
-      const streamId = `stream-setup-${Date.now()}`;
-      setStreamingMsgId(streamId);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: streamId,
-          conversationId,
-          role: "assistant",
-          content: "",
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-
-      const providerOrder = selectedProvider ? [selectedProvider] : undefined;
-      let fullOutput = "";
-      const finalOutput = await endpoints.streamComplete(
-        conversationId,
-        followupMessage,
-        (token: string) => {
-          fullOutput += token;
-          setMessages((prev) => prev.map((m) => (m.id === streamId ? { ...m, content: fullOutput } : m)));
-        },
-        providerOrder,
-        (name: string, args: string) => {
-          setToolCallHistory((prev) => [
-            ...prev,
-            {
-              id: `live-${Date.now()}-${Math.random()}`,
-              toolName: name,
-              arguments: (() => {
-                try {
-                  return JSON.parse(args);
-                } catch {
-                  return {};
-                }
-              })(),
-              createdAt: new Date().toISOString(),
-            },
-          ]);
-        }
-      );
-      setStreamingMsgId(null);
-      if (finalOutput && finalOutput !== fullOutput) {
-        setMessages((prev) => prev.map((m) => (m.id === streamId ? { ...m, content: finalOutput } : m)));
-      }
-      endpoints.getToolCalls(conversationId).then((calls) => setToolCallHistory(calls ?? [])).catch(() => {});
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `err-setup-${Date.now()}`,
-          conversationId,
-          role: "system",
-          content: `Setup saved, but assistant follow-up failed: ${msg}`,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      throw e instanceof Error ? e : new Error(msg);
-    } finally {
-      setSetupFormBusy(false);
-      setStreamingMsgId(null);
-    }
-  }, [activeConversationId, selectedProvider, sending, setupFormBusy]);
-
-  useEffect(() => {
-    const hidden = new Set<string>();
-    for (const msg of messages) {
-      if (msg.role !== "assistant") continue;
-      const parts = parseSetupForms(msg.content);
-      parts.forEach((part, idx) => {
-        if (part.kind !== "setup-form") return;
-        const formId = setupFormKey(part.payload, idx, msg.id);
-        try {
-          if (window.localStorage.getItem(`oc:setup-form:hidden:${formId}`) === "1") {
-            hidden.add(formId);
-          }
-        } catch {
-          // ignore localStorage failures
-        }
-      });
-    }
-    setHiddenSetupForms(hidden);
-  }, [messages]);
 
   // ─── Send message ───
   const handleSend = useCallback(async () => {
@@ -731,13 +362,14 @@ export default function ChatShell({
           );
         },
         providerOrder,
-        (name: string, args: string) => {
+        (name: string, args: string, kind?: "TOOL" | "MCP") => {
           // Add optimistic live entry
           setToolCallHistory((prev) => [
             ...prev,
             {
               id: `live-${Date.now()}-${Math.random()}`,
               toolName: name,
+              kind: kind ?? "TOOL",
               arguments: (() => { try { return JSON.parse(args); } catch { return {}; } })(),
               createdAt: new Date().toISOString(),
             },
@@ -871,6 +503,7 @@ export default function ChatShell({
                 return timeline.map((entry, i) => {
                   if (entry.kind === "tool") {
                     const tc = entry.item;
+                    const toolKind = tc.kind === "MCP" ? "MCP" : "TOOL";
                     const isLive = tc.id.startsWith("live-");
                     const isExpanded = expandedToolCalls.has(tc.id);
                     const toggleExpand = () => setExpandedToolCalls((prev) => {
@@ -885,7 +518,7 @@ export default function ChatShell({
                     const primaryKey = primaryArgKeys.find((k) => k in args) ?? Object.keys(args)[0];
                     const primaryVal = primaryKey ? String(args[primaryKey] ?? "") : "";
 
-                    // Parse stdout from output (output may be JSON with stdout field, or raw string)
+                    // Parse stdout from output (output may be JSON with stdout/output/result fields, or raw string)
                     let stdout = "";
                     let stdoutIsJson = false;
                     if (tc.output != null) {
@@ -894,17 +527,11 @@ export default function ChatShell({
                         const parsed = JSON.parse(raw);
                         const extracted = parsed.stdout ?? parsed.output ?? parsed.result;
                         if (extracted !== undefined) {
-                          // Extracted a specific field -- check if that field is also JSON
-                          const extractedStr = String(extracted);
-                          try {
-                            const inner = JSON.parse(extractedStr);
-                            stdout = JSON.stringify(inner, null, 2);
-                            stdoutIsJson = true;
-                          } catch {
-                            stdout = extractedStr;
-                          }
+                          // Extracted field may itself be an object (avoid [object Object])
+                          const rendered = displayValue(extracted);
+                          stdout = rendered.text;
+                          stdoutIsJson = rendered.isJson;
                         } else {
-                          // The whole output is JSON -- pretty print it
                           stdout = JSON.stringify(parsed, null, 2);
                           stdoutIsJson = true;
                         }
@@ -926,6 +553,7 @@ export default function ChatShell({
                           {/* Compact header -- always visible */}
                           <div className="flex items-center gap-2 px-3 py-1.5">
                             <svg className="text-[#6272a4] shrink-0 w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded border font-semibold ${toolKind === "MCP" ? "text-violet border-violet/40 bg-violet/10" : "text-cyan border-cyan/40 bg-cyan/10"}`}>[{toolKind}]</span>
                             <span className="text-[#8be9fd] shrink-0">{tc.toolName}</span>
                             {primaryVal && (
                               <span className="text-[#f8f8f2]/60 truncate flex-1">{primaryVal.slice(0, 80)}</span>
@@ -1013,16 +641,13 @@ export default function ChatShell({
                       </p>
                       <div className="text-sm text-on-surface font-body break-words">
                         {msg.role === "assistant" && msg.id === streamingMsgId && msg.content === "" ? (
-                          <Spinner size="sm" />
+                          <div className="space-y-2 py-0.5">
+                            <div className="h-3 rounded bg-on-surface-variant/15 animate-pulse w-3/4" />
+                            <div className="h-3 rounded bg-on-surface-variant/10 animate-pulse w-1/2" />
+                            <div className="h-3 rounded bg-on-surface-variant/8 animate-pulse w-2/3" />
+                          </div>
                         ) : msg.role === "assistant" ? (
-                          <RichAssistantContent
-                            content={msg.content}
-                            messageId={msg.id}
-                            conversationId={activeConversationId}
-                            onSubmitSetupForm={handleSetupFormSubmitted}
-                            hiddenForms={hiddenSetupForms}
-                            onHideForm={(formId) => setHiddenSetupForms((prev) => new Set(prev).add(formId))}
-                          />
+                          <MarkdownMessage content={msg.content} />
                         ) : (
                           <MarkdownMessage content={msg.content} compact />
                         )}
@@ -1053,10 +678,12 @@ export default function ChatShell({
               {sending && !streamingMsgId && (
                 <div className="flex justify-start animate-in fade-in duration-200">
                   <div className="shrink-0 mt-3 mr-2">
-                    <span className="block h-2 w-2 rounded-full bg-cyan animate-pulse" />
+                    <span className="block h-2 w-2 rounded-full bg-cyan" />
                   </div>
-                  <div className="bg-surface-mid rounded-lg p-4">
-                    <Spinner size="sm" />
+                  <div className="bg-surface-mid rounded-lg px-5 py-4 flex items-center gap-1.5">
+                    <span className="block h-2 w-2 rounded-full bg-on-surface-variant/60 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="block h-2 w-2 rounded-full bg-on-surface-variant/60 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="block h-2 w-2 rounded-full bg-on-surface-variant/60 animate-bounce" style={{ animationDelay: "300ms" }} />
                   </div>
                 </div>
               )}
@@ -1071,7 +698,7 @@ export default function ChatShell({
           style={{ right: "0" }}
         >
           <div className="w-full max-w-3xl pointer-events-auto">
-            <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl shadow-black/40 ring-1 ring-white/5 p-3">
+            <div className="rounded-xl border border-violet bg-surface-mid backdrop-blur-xl shadow-[var(--shadow-float)] ring-1 ring-violet/20 p-3">
               {/* Provider/model selector row */}
               {providers.length > 0 && (
                 <div className="mb-2 flex items-center gap-2">

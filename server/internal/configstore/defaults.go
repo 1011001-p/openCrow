@@ -171,7 +171,7 @@ func DefaultUserConfig() UserConfig {
 	}
 
 	return UserConfig{
-		Integrations: IntegrationsConfig{EmailAccounts: []EmailAccountConfig{}},
+		Integrations: IntegrationsConfig{EmailAccounts: []EmailAccountConfig{}, TelegramBots: []TelegramBotConfig{}},
 		Tools: ToolsConfig{
 			Definitions: toolDefinitions,
 			Enabled:     toolEnabled,
@@ -179,8 +179,7 @@ func DefaultUserConfig() UserConfig {
 		},
 		MCP: MCPConfig{Servers: []MCPServerConfig{}},
 		LinuxSandbox: LinuxSandboxConfig{
-			Enabled: false,
-			Shell:   "/bin/bash",
+			Enabled: true,
 		},
 		LLM: LLMConfig{
 			Providers: []ProviderConfig{},

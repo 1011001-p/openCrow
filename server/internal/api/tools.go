@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/smtp"
 	"os"
@@ -1477,10 +1478,53 @@ func (s *Server) toolSendNotification(ctx context.Context, userID string, args m
 		},
 	})
 
+	// Fanout to Telegram bots with a notificationChatId configured
+	telegramSent := 0
+	if s.configStore != nil {
+		if cfg, err := s.configStore.GetUserConfig(userID); err == nil {
+			msg := fmt.Sprintf("[notification] *%s*\n%s", title, body)
+			for _, bot := range cfg.Integrations.TelegramBots {
+				if !bot.Enabled || bot.BotToken == "" || bot.NotificationChatID == "" {
+					continue
+				}
+				if err := s.TelegramSendNotification(ctx, bot.BotToken, bot.NotificationChatID, msg); err != nil {
+					log.Printf("[send_notification] telegram bot %s error: %v", bot.Label, err)
+				} else {
+					telegramSent++
+				}
+			}
+		}
+	}
+
+	detail := "Notification sent via realtime hub."
+	if telegramSent > 0 {
+		detail += fmt.Sprintf(" Also sent to %d Telegram bot(s).", telegramSent)
+	}
 	return map[string]any{
 		"success": true,
-		"message": "Notification sent via realtime hub. Future: Telegram/WhatsApp integration.",
+		"message": detail,
 	}, nil
+}
+
+// notifyChannels fans out a title+body notification to all enabled Telegram bots
+// that have a notificationChatId configured. It is safe to call from any worker.
+func (s *Server) notifyChannels(ctx context.Context, userID, title, body string) {
+	if s.configStore == nil {
+		return
+	}
+	cfg, err := s.configStore.GetUserConfig(userID)
+	if err != nil {
+		return
+	}
+	msg := fmt.Sprintf("[notification] *%s*\n%s", title, body)
+	for _, bot := range cfg.Integrations.TelegramBots {
+		if !bot.Enabled || bot.BotToken == "" || bot.NotificationChatID == "" {
+			continue
+		}
+		if err := s.TelegramSendNotification(ctx, bot.BotToken, bot.NotificationChatID, msg); err != nil {
+			log.Printf("[channels] telegram bot %s notify error: %v", bot.Label, err)
+		}
+	}
 }
 
 // ── Shell tools ──────────────────────────────────────────────────────────
@@ -1506,15 +1550,8 @@ func (s *Server) toolExecuteShellCommand(ctx context.Context, userID string, arg
 		}
 	}
 
-	// Determine shell
-	shell := "/bin/sh"
-	if s.configStore != nil {
-		if cfg, err := s.configStore.GetUserConfig(userID); err == nil {
-			if candidate := strings.TrimSpace(cfg.LinuxSandbox.Shell); candidate != "" {
-				shell = candidate
-			}
-		}
-	}
+	// Shell is fixed.
+	shell := "/bin/bash"
 
 	// Background mode
 	if bg, ok := args["background"].(bool); ok && bg {
@@ -1591,8 +1628,8 @@ func (s *Server) writeCommandToTerminal(userID, command, output string, backgrou
 	// Build the display block:
 	// Dim separator, bold cyan prompt prefix, command, output (if any)
 	var buf strings.Builder
-	buf.WriteString("\r\n\x1b[2m── 🤖 AI command ──────────────────\x1b[0m\r\n")
-	buf.WriteString("\x1b[1;36m❯ \x1b[0m\x1b[1m")
+	buf.WriteString("\r\n\x1b[2m-- [AI] command --------------------\x1b[0m\r\n")
+	buf.WriteString("\x1b[1;36m> \x1b[0m\x1b[1m")
 	buf.WriteString(command)
 	buf.WriteString(bgSuffix)
 	buf.WriteString("\x1b[0m\r\n")
@@ -1631,7 +1668,7 @@ func (s *Server) writeToolCallToTerminal(userID, kind, name string, args map[str
 	}
 
 	var buf strings.Builder
-	buf.WriteString("\r\n\x1b[2m── 🤖 AI tool ─────────────────────\x1b[0m\r\n")
+	buf.WriteString("\r\n\x1b[2m-- [AI] tool -----------------------\x1b[0m\r\n")
 	buf.WriteString("\x1b[1;35m[")
 	buf.WriteString(kind)
 	buf.WriteString("]\x1b[0m ")

@@ -218,6 +218,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /v1/skills", s.requireAccessToken(http.HandlerFunc(s.handleGetSkillsConfig)))
 	s.mux.Handle("PUT /v1/skills", s.requireAccessToken(http.HandlerFunc(s.handlePutSkillsConfig)))
 	s.mux.Handle("POST /v1/mcp/test", s.requireAccessToken(http.HandlerFunc(s.handleTestMCPServer)))
+	s.mux.Handle("POST /v1/telegram/test", s.requireAccessToken(http.HandlerFunc(s.handleTestTelegramBot)))
 
 	// File-based skills (SKILL.md on disk)
 	s.mux.Handle("GET /v1/skill-files", s.requireAccessToken(http.HandlerFunc(s.handleListSkillFiles)))

@@ -252,28 +252,7 @@ func (s *Server) buildSystemPrompt(ctx context.Context, userID string, cfg *conf
 		}
 	}
 
-	sb.WriteString("\n\n## Setup Forms\n")
-  sb.WriteString("You can render interactive setup forms in chat ONLY for email and MCP setup when it helps the user.\n")
-  sb.WriteString("To render a form, output a fenced code block with language `setup-form` containing JSON.\n")
-  sb.WriteString("Supported form values for `form`: `email_setup`, `mcp_setup`.\n")
-  sb.WriteString("Do not use this format for any other feature.\n\n")
-  sb.WriteString("Example:\n")
-  sb.WriteString("```setup-form\n")
-  sb.WriteString("{\n")
-  sb.WriteString("  \"form\": \"mcp_setup\",\n")
-  sb.WriteString("  \"title\": \"Configure MCP Server\",\n")
-  sb.WriteString("  \"description\": \"Provide MCP URL and authorization.\",\n")
-  sb.WriteString("  \"submitLabel\": \"Save MCP\",\n")
-  sb.WriteString("  \"defaults\": {\n")
-  sb.WriteString("    \"name\": \"My MCP\",\n")
-  sb.WriteString("    \"url\": \"https://example.com/mcp\",\n")
-  sb.WriteString("    \"authorization\": \"Bearer ...\",\n")
-  sb.WriteString("    \"enabled\": true\n")
-  sb.WriteString("  }\n")
-  sb.WriteString("}\n")
-  sb.WriteString("```\n")
-
- return sb.String()
+	return sb.String()
 }
 
 // buildProvidersFromConfig returns an ordered list of orchestrator providers from

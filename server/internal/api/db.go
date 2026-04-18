@@ -397,6 +397,11 @@ ORDER BY tc.created_at ASC;
 			return nil, err
 		}
 		_ = json.Unmarshal(argsJSON, &item.Arguments)
+		if isBuiltinToolName(item.ToolName) {
+			item.Kind = "TOOL"
+		} else {
+			item.Kind = "MCP"
+		}
 		item.CreatedAt = createdAt.UTC().Format(time.RFC3339)
 		result = append(result, item)
 	}

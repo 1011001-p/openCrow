@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { endpoints, type UserConfig, getAccessToken } from "@/lib/api";
-import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
 const API_BASE =
@@ -15,8 +14,6 @@ function getWsBase(): string {
 }
 
 export default function TerminalView() {
-  const [config, setConfig] = useState<UserConfig | null>(null);
-  const [saving, setSaving] = useState(false);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,23 +24,6 @@ export default function TerminalView() {
   const wsRef = useRef<WebSocket | null>(null);
   // Generation counter: incremented on cleanup so stale async connects abort
   const genRef = useRef(0);
-
-  useEffect(() => {
-    endpoints
-      .getConfig()
-      .then(setConfig)
-      .catch(() => {});
-  }, []);
-
-  const saveSandbox = async () => {
-    if (!config) return;
-    setSaving(true);
-    try {
-      await endpoints.putConfig(config);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const connectTerminal = useCallback(async () => {
     if (!termContainerRef.current) return;
@@ -193,29 +173,6 @@ export default function TerminalView() {
 
   return (
     <div className="flex flex-col gap-4 h-[calc(100vh-64px)]">
-      {/* Linux Sandbox settings */}
-      <div className="rounded-lg border border-outline-ghost bg-surface-low p-4 shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-medium text-on-surface">Linux Sandbox</span>
-          <Button variant="secondary" size="sm" onClick={saveSandbox} loading={saving}>
-            Save
-          </Button>
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="flex-1 max-w-xs">
-            <Input
-              label="Shell"
-              value={config?.linuxSandbox?.shell ?? "/bin/bash"}
-              onChange={(e) =>
-                setConfig((c) =>
-                  c ? { ...c, linuxSandbox: { ...c.linuxSandbox, shell: e.target.value } } : c
-                )
-              }
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Terminal window */}
       <div className="flex-1 flex flex-col rounded-lg overflow-hidden border border-[#2a2a3e] min-h-0">
         {/* Title bar */}
@@ -226,7 +183,7 @@ export default function TerminalView() {
             <span className="block h-3 w-3 rounded-full bg-[#28c840]" />
           </div>
           <span className="text-xs font-mono text-[#8888aa]">
-            openCrow@server &mdash; {config?.linuxSandbox?.shell ?? "/bin/bash"}
+            openCrow@server &mdash; /bin/bash
           </span>
           <div className="ml-auto flex items-center gap-3">
             {connected ? (

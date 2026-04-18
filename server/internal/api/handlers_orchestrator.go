@@ -287,9 +287,14 @@ func (s *Server) handleOrchestratorStream(w http.ResponseWriter, r *http.Request
 			// Tool calls: notify client, execute, and continue loop
 			for _, tc := range toolCalls {
 				argsJSON, _ := json.Marshal(tc.Arguments)
+				kind := "MCP"
+				if isBuiltinToolName(tc.Name) {
+					kind = "TOOL"
+				}
 				sendEvent("tool_call", map[string]string{
 					"name":      tc.Name,
 					"arguments": string(argsJSON),
+					"kind":      kind,
 				})
 			}
 			assistantMsg := orchestrator.ChatMessage{Role: "assistant", ToolCalls: toolCalls}
@@ -315,7 +320,11 @@ func (s *Server) handleOrchestratorStream(w http.ResponseWriter, r *http.Request
 		baseExecutor := s.buildToolExecutor(ctx, userID)
 		wrappedExecutor := func(ectx context.Context, name string, args map[string]any) (string, error) {
 			argsJSON, _ := json.Marshal(args)
-			sendEvent("tool_call", map[string]string{"name": name, "arguments": string(argsJSON)})
+			kind := "MCP"
+			if isBuiltinToolName(name) {
+				kind = "TOOL"
+			}
+			sendEvent("tool_call", map[string]string{"name": name, "arguments": string(argsJSON), "kind": kind})
 			res, err := baseExecutor(ectx, name, args)
 			if err != nil {
 				sendEvent("tool_result", map[string]string{"name": name, "result": err.Error()})
@@ -487,7 +496,11 @@ func (s *Server) handleRegenerateMessage(w http.ResponseWriter, r *http.Request)
 			}
 			for _, tc := range toolCalls {
 				argsJSON, _ := json.Marshal(tc.Arguments)
-				sendEvent("tool_call", map[string]string{"name": tc.Name, "arguments": string(argsJSON)})
+				kind := "MCP"
+				if isBuiltinToolName(tc.Name) {
+					kind = "TOOL"
+				}
+				sendEvent("tool_call", map[string]string{"name": tc.Name, "arguments": string(argsJSON), "kind": kind})
 			}
 			loopMsgs = append(loopMsgs, orchestrator.ChatMessage{Role: "assistant", ToolCalls: toolCalls})
 			for _, tc := range toolCalls {
@@ -506,7 +519,11 @@ func (s *Server) handleRegenerateMessage(w http.ResponseWriter, r *http.Request)
 			System: systemPrompt, Messages: chatMsgs, Tools: toolSpecs,
 			ToolExecutor: func(ectx context.Context, name string, args map[string]any) (string, error) {
 				argsJSON, _ := json.Marshal(args)
-				sendEvent("tool_call", map[string]string{"name": name, "arguments": string(argsJSON)})
+				kind := "MCP"
+				if isBuiltinToolName(name) {
+					kind = "TOOL"
+				}
+				sendEvent("tool_call", map[string]string{"name": name, "arguments": string(argsJSON), "kind": kind})
 				res, err := s.buildToolExecutor(ctx, userID)(ectx, name, args)
 				if err != nil {
 					sendEvent("tool_result", map[string]string{"name": name, "result": err.Error()})

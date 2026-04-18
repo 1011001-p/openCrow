@@ -10,15 +10,14 @@
 - **Web UI:** Next.js
 - **Infra:** Docker Compose (PostgreSQL + Redis)
 
-## Quick start (2 compose files)
+## Quick start
 
 Use one of the two compose files depending on your mode.
 
 ### Development (`compose.dev.yaml`)
 
 ```bash
-# optional: create local overrides
-# cp .env.example .env
+cp .env.example .env
 
 docker compose -f compose.dev.yaml up --build
 ```
@@ -33,19 +32,19 @@ Stop dev stack:
 docker compose -f compose.dev.yaml down
 ```
 
-### Production (`compose.prod.yaml`)
+### Production (`compose.yaml`)
 
 ```bash
 # optional: create local overrides
 # cp .env.example .env
 
-docker compose -f compose.prod.yaml up --build -d
+docker compose -f compose.yaml up --build -d
 ```
 
 Stop prod stack:
 
 ```bash
-docker compose -f compose.prod.yaml down
+docker compose -f compose.yaml down
 ```
 
 ### Open

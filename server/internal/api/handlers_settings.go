@@ -683,3 +683,59 @@ func (s *Server) handlePutSkillsConfig(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, saved.Skills)
 }
+
+// handleTestTelegramBot verifies a bot token by calling getMe and optionally sends a test message.
+func (s *Server) handleTestTelegramBot(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		BotToken           string `json:"botToken"`
+		NotificationChatID string `json:"notificationChatId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.BotToken == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "botToken is required"})
+		return
+	}
+
+	type tgUser struct {
+		ID        int64  `json:"id"`
+		IsBot     bool   `json:"is_bot"`
+		FirstName string `json:"first_name"`
+		Username  string `json:"username"`
+	}
+	type getMeResp struct {
+		OK     bool   `json:"ok"`
+		Result tgUser `json:"result"`
+	}
+
+	start := time.Now()
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/getMe", req.BotToken)
+	httpReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, apiURL, nil)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	latencyMs := time.Since(start).Milliseconds()
+
+	var getMeResult getMeResp
+	if err := json.NewDecoder(resp.Body).Decode(&getMeResult); err != nil || !getMeResult.OK {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "latencyMs": latencyMs, "error": "invalid bot token or Telegram API error"})
+		return
+	}
+
+	bot := getMeResult.Result
+	detail := fmt.Sprintf("@%s (id: %d)", bot.Username, bot.ID)
+
+	// Note: no test message is sent to avoid polluting the chat.
+	// Token validity is confirmed via getMe above.
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"latencyMs": latencyMs,
+		"detail":    detail,
+	})
+}

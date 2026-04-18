@@ -1,0 +1,23 @@
+.git
+.gitignore
+
+# Build / temp artifacts
+tmp/
+dist/
+bin/
+out/
+coverage/
+*.out
+
+# Local env / editor files
+.env
+.env.*
+.DS_Store
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Node artifacts if present in server workspace
+node_modules/

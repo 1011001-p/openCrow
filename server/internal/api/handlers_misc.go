@@ -36,15 +36,7 @@ func (s *Server) handleRunServerCommand(w http.ResponseWriter, r *http.Request) 
 		timeout = requested
 	}
 
-	shell := "/bin/sh"
-	if s.configStore != nil {
-		if cfg, err := s.configStore.GetUserConfig(userIDFromContext(r.Context())); err == nil {
-			candidate := strings.TrimSpace(cfg.LinuxSandbox.Shell)
-			if candidate != "" {
-				shell = candidate
-			}
-		}
-	}
+	shell := "/bin/bash"
 
 	started := time.Now().UTC()
 	execCtx, cancel := context.WithTimeout(r.Context(), timeout)

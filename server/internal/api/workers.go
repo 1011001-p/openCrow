@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 
@@ -33,6 +34,7 @@ func (s *Server) StartWorkers(ctx context.Context) {
 	go s.runTaskWorker(ctx)
 	go s.runHeartbeatWorker(ctx)
 	go s.runEmailWorker(ctx)
+	go s.runTelegramWorker(ctx)
 }
 
 // ------------------------------------------------------------
@@ -148,6 +150,15 @@ func (s *Server) executeScheduledTask(ctx context.Context, taskID, userID, descr
 	output := result.Output
 	s.logWorkerOrchestratorTrace("task-worker", fmt.Sprintf("task %s", taskID), result)
 	lastResult := summarizeWorkerExecution(result, execErr, resolvedTZ)
+
+	// Notify via channels on failure
+	if execErr != nil {
+		notifyTitle := "Task failed: " + description
+		if strings.TrimSpace(description) == "" {
+			notifyTitle = "Scheduled task failed"
+		}
+		s.notifyChannels(taskCtx, userID, notifyTitle, execErr.Error())
+	}
 
 	// Save execution as a conversation so it's visible in the chat UI
 	titleBase := description
@@ -543,6 +554,9 @@ func (s *Server) executeHeartbeat(ctx context.Context, userID string, intervalSe
 			},
 		})
 
+		// Fan out to configured Telegram channels
+		s.notifyChannels(hbCtx, userID, "Heartbeat attention", workerLogPreview(message, 280))
+
 		titleBase := workerLogPreview(message, 72)
 		if titleBase == "(no output)" {
 			titleBase = strings.ToUpper(status)
@@ -801,4 +815,209 @@ func imapQuote(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `"`, `\"`)
 	return `"` + s + `"`
+}
+
+// ------------------------------------------------------------
+// Telegram Worker
+// ------------------------------------------------------------
+
+func (s *Server) runTelegramWorker(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	s.wlog("telegram-worker", "[telegram-worker] started")
+	for {
+		select {
+		case <-ctx.Done():
+			s.wlog("telegram-worker", "[telegram-worker] stopped")
+			return
+		case <-ticker.C:
+			err := s.processTelegramBots(ctx)
+			s.workerStatus.tick("telegram-worker", err)
+			if err != nil {
+				s.wlog("telegram-worker", "[telegram-worker] error: %v", err)
+			}
+		}
+	}
+}
+
+func (s *Server) processTelegramBots(ctx context.Context) error {
+	if s.configStore == nil {
+		return nil
+	}
+	userIDs, err := s.configStore.ListUserIDs()
+	if err != nil {
+		return fmt.Errorf("list user IDs: %w", err)
+	}
+	for _, userID := range userIDs {
+		cfg, err := s.configStore.GetUserConfig(userID)
+		if err != nil {
+			continue
+		}
+		changed := false
+		for i, bot := range cfg.Integrations.TelegramBots {
+			if !bot.Enabled || bot.BotToken == "" {
+				continue
+			}
+			newLastID, err := s.pollTelegramBot(ctx, userID, bot)
+			if err != nil {
+				s.wlog("telegram-worker", "[telegram-worker] user %s bot %s poll error: %v", userID, bot.Label, err)
+				continue
+			}
+			if newLastID > cfg.Integrations.TelegramBots[i].LastUpdateID {
+				cfg.Integrations.TelegramBots[i].LastUpdateID = newLastID
+				changed = true
+			}
+		}
+		if changed {
+			if _, err := s.configStore.PutUserConfig(userID, cfg); err != nil {
+				s.wlog("telegram-worker", "[telegram-worker] failed to save config for user %s: %v", userID, err)
+			}
+		}
+	}
+	return nil
+}
+
+type tgGetUpdatesResp struct {
+	OK     bool        `json:"ok"`
+	Result []tgUpdate  `json:"result"`
+}
+
+type tgUpdate struct {
+	UpdateID int64     `json:"update_id"`
+	Message  tgMessage `json:"message"`
+}
+
+type tgMessage struct {
+	MessageID int64  `json:"message_id"`
+	Text      string `json:"text"`
+	Chat      tgChat `json:"chat"`
+	From      tgUser `json:"from"`
+}
+
+type tgChat struct {
+	ID int64 `json:"id"`
+}
+
+type tgUser struct {
+	Username  string `json:"username"`
+	FirstName string `json:"first_name"`
+}
+
+func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configstore.TelegramBotConfig) (int64, error) {
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?offset=%d&timeout=0&limit=100", bot.BotToken, bot.LastUpdateID+1)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return bot.LastUpdateID, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return bot.LastUpdateID, err
+	}
+	defer resp.Body.Close()
+
+	var result tgGetUpdatesResp
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return bot.LastUpdateID, fmt.Errorf("decode getUpdates: %w", err)
+	}
+	if !result.OK {
+		return bot.LastUpdateID, fmt.Errorf("telegram getUpdates not ok")
+	}
+
+	// Build allowed chat set
+	allowedSet := map[string]bool{}
+	for _, cid := range bot.AllowedChatIDs {
+		allowedSet[strings.TrimSpace(cid)] = true
+	}
+
+	lastID := bot.LastUpdateID
+	for _, upd := range result.Result {
+		if upd.UpdateID > lastID {
+			lastID = upd.UpdateID
+		}
+		if upd.Message.Text == "" {
+			continue
+		}
+		chatIDStr := fmt.Sprintf("%d", upd.Message.Chat.ID)
+		if len(allowedSet) > 0 && !allowedSet[chatIDStr] {
+			s.wlog("telegram-worker", "[telegram-worker] ignoring message from disallowed chat %s", chatIDStr)
+			continue
+		}
+
+		// Handle /new command: clear context signal (just send confirmation; no orchestrator call)
+		if strings.TrimSpace(upd.Message.Text) == "/new" {
+			s.wlog("telegram-worker", "[telegram-worker] /new command from chat %s -- sending confirmation", chatIDStr)
+			if sendErr := s.sendTelegramMessage(ctx, bot.BotToken, upd.Message.Chat.ID, "New conversation started. What's on your mind?"); sendErr != nil {
+				s.wlog("telegram-worker", "[telegram-worker] failed to send /new confirmation to chat %s: %v", chatIDStr, sendErr)
+			}
+			continue
+		}
+
+		// Build prompt with Telegram channel context so the model understands where it's running
+		from := upd.Message.From.FirstName
+		if upd.Message.From.Username != "" {
+			from = "@" + upd.Message.From.Username
+		}
+		prompt := upd.Message.Text
+		if from != "" {
+			prompt = fmt.Sprintf("[Telegram from %s]: %s", from, prompt)
+		}
+		// Prepend a brief context hint so the model never denies having Telegram access
+		prompt = "[Context: You are responding to your owner via their configured Telegram bot. Reply naturally and directly -- do not say you lack Telegram integration; you ARE the bot.]\n\n" + prompt
+
+		s.wlog("telegram-worker", "[telegram-worker] user %s bot %s message from chat %s: %s", userID, bot.Label, chatIDStr, workerLogPreview(upd.Message.Text, 120))
+
+		result, err := s.runOrchestratorForUser(ctx, "telegram-worker", userID, prompt)
+		reply := result.Output
+		if err != nil {
+			reply = fmt.Sprintf("Error: %v", err)
+		}
+		if reply == "" {
+			reply = "(no reply)"
+		}
+
+		if sendErr := s.sendTelegramMessage(ctx, bot.BotToken, upd.Message.Chat.ID, reply); sendErr != nil {
+			s.wlog("telegram-worker", "[telegram-worker] failed to send reply to chat %s: %v", chatIDStr, sendErr)
+		}
+	}
+
+	return lastID, nil
+}
+
+func (s *Server) sendTelegramMessage(ctx context.Context, botToken string, chatID int64, text string) error {
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
+	payload := map[string]any{
+		"chat_id": chatID,
+		"text":    text,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("sendMessage HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// TelegramSendNotification sends a text message to a bot's notification chat.
+func (s *Server) TelegramSendNotification(ctx context.Context, botToken, notificationChatID, text string) error {
+	if notificationChatID == "" {
+		return nil
+	}
+	var chatID int64
+	if _, err := fmt.Sscanf(notificationChatID, "%d", &chatID); err != nil {
+		return fmt.Errorf("invalid notificationChatId %q: %w", notificationChatID, err)
+	}
+	return s.sendTelegramMessage(ctx, botToken, chatID, text)
 }

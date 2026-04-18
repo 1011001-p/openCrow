@@ -171,6 +171,7 @@ export interface MessageDTO {
 export interface ToolCallRecord {
   id: string;
   toolName: string;
+  kind?: "TOOL" | "MCP";
   arguments: Record<string, unknown>;
   output?: string;
   error?: string;
@@ -227,6 +228,17 @@ export interface WorkerStat {
 export interface WorkerLogEntry {
   ts: string;   // ISO timestamp
   line: string;
+}
+
+export interface TelegramBotConfig {
+  id?: string;
+  label: string;
+  botToken: string;
+  allowedChatIds: string[];
+  notificationChatId: string;
+  enabled: boolean;
+  pollIntervalSeconds: number;
+  lastUpdateId?: number;
 }
 
 export interface EmailAccountConfig {
@@ -377,14 +389,14 @@ export interface ProviderModelsProbeResult {
 }
 
 export interface UserConfig {
-  integrations: { emailAccounts: EmailAccountConfig[] };
+  integrations: { emailAccounts: EmailAccountConfig[]; telegramBots: TelegramBotConfig[] };
   tools: {
     definitions: ToolDefinition[];
     golangTools: GolangToolEntry[];
     enabledTools: Record<string, boolean>;
   };
   mcp: { servers: MCPServerConfig[] };
-  linuxSandbox: { enabled: boolean; shell: string };
+  linuxSandbox: { enabled: boolean };
   llm: { providers: ProviderConfig[] };
   skills: { entries: SkillEntry[] };
   prompts: { systemPrompt: string; heartbeatPrompt: string };
@@ -394,14 +406,14 @@ export interface UserConfig {
 }
 
 interface ServerUserConfig {
-  integrations?: { emailAccounts?: Array<EmailAccountConfig & { useTls?: boolean }> };
+  integrations?: { emailAccounts?: Array<EmailAccountConfig & { useTls?: boolean }>; telegramBots?: TelegramBotConfig[] };
   tools?: {
     definitions?: ToolDefinition[];
     golangTools?: GolangToolEntry[];
     enabled?: Record<string, boolean>;
     enabledTools?: Record<string, boolean>;
   };
-  linuxSandbox?: { enabled?: boolean; shell?: string };
+  linuxSandbox?: { enabled?: boolean };
   mcp?: { servers?: MCPServerConfig[] };
   llm?: { providers?: ProviderConfig[] };
   skills?: { entries?: SkillEntry[] };
@@ -440,6 +452,7 @@ function normalizeUserConfig(raw: ServerUserConfig): UserConfig {
         ...acct,
         tls: acct.tls ?? acct.useTls ?? true,
       })),
+      telegramBots: Array.isArray(raw?.integrations?.telegramBots) ? raw.integrations!.telegramBots : [],
     },
     tools: {
       definitions: definitions.map((tool) => ({
@@ -451,7 +464,6 @@ function normalizeUserConfig(raw: ServerUserConfig): UserConfig {
     },
     linuxSandbox: {
       enabled: !!raw?.linuxSandbox?.enabled,
-      shell: raw?.linuxSandbox?.shell ?? "/bin/bash",
     },
     mcp: {
       servers: Array.isArray(raw?.mcp?.servers) ? raw.mcp!.servers : [],
@@ -501,6 +513,7 @@ function toServerUserConfig(config: UserConfig): ServerUserConfig {
         ...acct,
         useTls: acct.tls,
       })),
+      telegramBots: config.integrations.telegramBots ?? [],
     },
     tools: {
       definitions: config.tools.definitions,
@@ -582,6 +595,12 @@ export const endpoints = {
       body: JSON.stringify(server),
     }),
 
+  testTelegramBot: (params: { botToken: string; notificationChatId?: string }) =>
+    api<{ ok: boolean; latencyMs?: number; error?: string; detail?: string }>("/v1/telegram/test", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
+
   // File-based skills
   listSkillFiles: () => api<SkillFile[]>("/v1/skill-files"),
   getSkillFile: (slug: string) => api<SkillFile>(`/v1/skill-files/${slug}`),
@@ -635,7 +654,7 @@ export const endpoints = {
     message: string,
     onToken: (token: string) => void,
     providerOrder?: string[],
-    onToolCall?: (name: string, args: string) => void,
+    onToolCall?: (name: string, args: string, kind?: "TOOL" | "MCP") => void,
   ): Promise<string> => {
     const token = getAccessToken();
     const headers: Record<string, string> = {
@@ -680,7 +699,8 @@ export const endpoints = {
           } else if (eventType === "done") {
             fullOutput = data.output ?? fullOutput;
           } else if (eventType === "tool_call" && onToolCall) {
-            onToolCall(data.name, data.arguments ?? "{}");
+            const kind = data.kind === "MCP" ? "MCP" : data.kind === "TOOL" ? "TOOL" : undefined;
+            onToolCall(data.name, data.arguments ?? "{}", kind);
           } else if (eventType === "error") {
             throw new ApiError(502, data.error ?? "stream error");
           }

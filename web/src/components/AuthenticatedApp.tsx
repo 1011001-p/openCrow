@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import ChatShell from "@/components/ChatShell";
 import ConfigStudio from "@/components/ConfigStudio";
 import OverviewView from "@/components/OverviewView";
@@ -153,9 +154,12 @@ export default function AuthenticatedApp() {
 
         {/* Branding */}
         <div className="relative px-5 pt-6 pb-4">
-          <h1 className="font-display text-3xl font-bold tracking-tight">
-            <span className="text-on-surface-variant">open</span>
-            <span className="text-violet-light">Crow</span>
+          <h1 className="font-display text-3xl font-bold tracking-tight flex items-center gap-2">
+            <span>
+              <span className="text-on-surface-variant">open</span>
+              <span className="text-violet-light">Crow</span>
+            </span>
+            <Image src="/crow.png" alt="openCrow" width={44} height={44} className="opacity-90" />
           </h1>
           <p className="mt-1 font-mono text-xs text-on-surface-variant">
             v0.1.0 . Active

@@ -73,9 +73,6 @@ func TestDefaultUserConfig(t *testing.T) {
 			t.Errorf("tool %q not enabled", def.Name)
 		}
 	}
-	if cfg.LinuxSandbox.Shell != "/bin/bash" {
-		t.Errorf("Shell = %q", cfg.LinuxSandbox.Shell)
-	}
 	if cfg.Heartbeat.IntervalSeconds != 300 {
 		t.Errorf("IntervalSeconds = %d", cfg.Heartbeat.IntervalSeconds)
 	}
@@ -85,9 +82,6 @@ func TestNormalize_FillsDefaults(t *testing.T) {
 	cfg := UserConfig{} // empty
 	n := normalize(cfg)
 
-	if n.LinuxSandbox.Shell == "" {
-		t.Error("shell should be filled")
-	}
 	if n.Prompts.SystemPrompt == "" {
 		t.Error("system prompt should be filled")
 	}

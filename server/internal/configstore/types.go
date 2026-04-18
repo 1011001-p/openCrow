@@ -36,6 +36,18 @@ type SkillEntry struct {
 
 type IntegrationsConfig struct {
 	EmailAccounts []EmailAccountConfig `json:"emailAccounts"`
+	TelegramBots  []TelegramBotConfig  `json:"telegramBots"`
+}
+
+type TelegramBotConfig struct {
+	ID                  string   `json:"id"`
+	Label               string   `json:"label"`
+	BotToken            string   `json:"botToken"`
+	AllowedChatIDs      []string `json:"allowedChatIds"`
+	NotificationChatID  string   `json:"notificationChatId"`
+	Enabled             bool     `json:"enabled"`
+	PollIntervalSeconds int      `json:"pollIntervalSeconds"`
+	LastUpdateID        int64    `json:"lastUpdateId"`
 }
 
 type MCPConfig struct {
@@ -95,8 +107,7 @@ type GolangToolEntry struct {
 }
 
 type LinuxSandboxConfig struct {
-	Enabled bool   `json:"enabled"`
-	Shell   string `json:"shell"`
+	Enabled bool `json:"enabled"`
 }
 
 type LLMConfig struct {
