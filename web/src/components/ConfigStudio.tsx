@@ -20,6 +20,7 @@ import {
   type MCPServerConfig,
   type MCPToolSummary,
   type MCPServerTestResult,
+  type ProviderModelsProbeResult,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -389,6 +390,11 @@ type UpdateConfigFn = (fn: (c: UserConfig) => UserConfig) => void;
 
 type ProviderProbeStatus = { ok: boolean; latencyMs: number; error?: string } | null;
 
+function isOpenAICompatibleProviderKind(kind: string): boolean {
+  const normalized = kind.trim().toLowerCase();
+  return normalized === "openai" || normalized === "custom" || normalized === "openrouter" || normalized === "litellm";
+}
+
 function ProviderCard({
   prov,
   index: i,
@@ -404,6 +410,9 @@ function ProviderCard({
   const [expanded, setExpanded] = useState(!configured);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; latencyMs: number; error?: string } | null>(null);
+  const [probingModels, setProbingModels] = useState(false);
+  const [modelsProbeResult, setModelsProbeResult] = useState<ProviderModelsProbeResult | null>(null);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
 
   const handleTest = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -422,6 +431,33 @@ function ProviderCard({
       setTestResult({ ok: false, latencyMs: 0, error: err instanceof Error ? err.message : "Test failed" });
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleProbeModels = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setProbingModels(true);
+    setModelsProbeResult(null);
+    try {
+      const res = await endpoints.probeProviderModels({
+        kind: prov.kind,
+        baseUrl: prov.baseUrl,
+        apiKeyRef: prov.apiKeyRef,
+      });
+      setModelsProbeResult(res);
+      const models = Array.isArray(res.models) ? res.models.filter((m) => !!m?.trim()) : [];
+      setAvailableModels(models);
+      if (models.length > 0 && !models.includes(prov.model)) {
+        updateConfig((c) => {
+          c.llm.providers[i].model = models[0];
+          return c;
+        });
+      }
+    } catch (err) {
+      setModelsProbeResult({ ok: false, error: err instanceof Error ? err.message : "Probe failed" });
+      setAvailableModels([]);
+    } finally {
+      setProbingModels(false);
     }
   };
 
@@ -469,7 +505,34 @@ function ProviderCard({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select label="Kind" options={PROVIDER_KINDS} value={prov.kind} onChange={(e) => updateConfig((c) => { c.llm.providers[i].kind = e.target.value; return c; })} />
             <Input label="Name" value={prov.name} onChange={(e) => updateConfig((c) => { c.llm.providers[i].name = e.target.value; return c; })} />
-            <Input label="Model" value={prov.model} onChange={(e) => updateConfig((c) => { c.llm.providers[i].model = e.target.value; return c; })} />
+            {isOpenAICompatibleProviderKind(prov.kind) ? (
+              <div className="space-y-2">
+                {availableModels.length > 0 ? (
+                  <Select
+                    label="Model"
+                    options={availableModels.map((m) => ({ value: m, label: m }))}
+                    value={prov.model || availableModels[0]}
+                    onChange={(e) => updateConfig((c) => { c.llm.providers[i].model = e.target.value; return c; })}
+                  />
+                ) : (
+                  <Input label="Model" value={prov.model} onChange={(e) => updateConfig((c) => { c.llm.providers[i].model = e.target.value; return c; })} />
+                )}
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" loading={probingModels} onClick={handleProbeModels} disabled={!prov.kind}>
+                    Probe models
+                  </Button>
+                  {modelsProbeResult && (
+                    <span className={`text-xs font-mono ${modelsProbeResult.ok ? "text-cyan" : "text-error"}`}>
+                      {modelsProbeResult.ok
+                        ? `${availableModels.length} model${availableModels.length === 1 ? "" : "s"} found`
+                        : (modelsProbeResult.error || "Probe failed")}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <Input label="Model" value={prov.model} onChange={(e) => updateConfig((c) => { c.llm.providers[i].model = e.target.value; return c; })} />
+            )}
             <Input label="Base URL" value={prov.baseUrl} onChange={(e) => updateConfig((c) => { c.llm.providers[i].baseUrl = e.target.value; return c; })} />
             <Input label="API Key" type="password" value={prov.apiKeyRef} onChange={(e) => updateConfig((c) => { c.llm.providers[i].apiKeyRef = e.target.value; return c; })} />
           </div>

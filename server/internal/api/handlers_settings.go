@@ -126,6 +126,18 @@ type ProviderTestResult struct {
 	Model     string `json:"model,omitempty"`
 }
 
+type ProviderModelsRequest struct {
+	Kind    string `json:"kind"`
+	BaseURL string `json:"baseUrl"`
+	APIKey  string `json:"apiKeyRef"`
+}
+
+type ProviderModelsResponse struct {
+	OK     bool     `json:"ok"`
+	Models []string `json:"models,omitempty"`
+	Error  string   `json:"error,omitempty"`
+}
+
 func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 	var req ProviderTestRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -155,6 +167,133 @@ func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, ProviderTestResult{OK: true, LatencyMs: latency, Model: req.Model})
+}
+
+func isOpenAICompatibleKind(kind string) bool {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "openai", "custom", "openrouter", "litellm":
+		return true
+	default:
+		return false
+	}
+}
+
+func resolveOpenAICompatibleBaseURL(kind, baseURL string) string {
+	k := strings.ToLower(strings.TrimSpace(kind))
+	b := strings.TrimSpace(baseURL)
+	if b != "" {
+		return b
+	}
+	switch k {
+	case "openrouter":
+		return "https://openrouter.ai/api"
+	case "litellm":
+		return "http://localhost:4000"
+	default:
+		return "https://api.openai.com"
+	}
+}
+
+func openAIModelsEndpoint(baseURL string) string {
+	b := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	lb := strings.ToLower(b)
+	if strings.HasSuffix(lb, "/models") {
+		return b
+	}
+	if strings.HasSuffix(lb, "/v1") {
+		return b + "/models"
+	}
+	return b + "/v1/models"
+}
+
+func fetchOpenAICompatibleModels(ctx context.Context, kind, baseURL, apiKey string) ([]string, error) {
+	resolvedBase := resolveOpenAICompatibleBaseURL(kind, baseURL)
+	url := openAIModelsEndpoint(resolvedBase)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	if strings.TrimSpace(apiKey) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(apiKey))
+	}
+
+	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("models probe http %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var payload struct {
+		Data []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"data"`
+		Models []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("invalid models response: %w", err)
+	}
+
+	seen := map[string]struct{}{}
+	models := make([]string, 0, len(payload.Data)+len(payload.Models))
+	appendModel := func(id, name string) {
+		m := strings.TrimSpace(id)
+		if m == "" {
+			m = strings.TrimSpace(name)
+		}
+		if m == "" {
+			return
+		}
+		if _, ok := seen[m]; ok {
+			return
+		}
+		seen[m] = struct{}{}
+		models = append(models, m)
+	}
+	for _, m := range payload.Data {
+		appendModel(m.ID, m.Name)
+	}
+	for _, m := range payload.Models {
+		appendModel(m.ID, m.Name)
+	}
+
+	sort.Strings(models)
+	return models, nil
+}
+
+func (s *Server) handleProbeProviderModels(w http.ResponseWriter, r *http.Request) {
+	var req ProviderModelsRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if !isOpenAICompatibleKind(req.Kind) {
+		writeJSON(w, http.StatusOK, ProviderModelsResponse{OK: false, Error: "model probing only supported for OpenAI-compatible providers"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	models, err := fetchOpenAICompatibleModels(ctx, req.Kind, req.BaseURL, req.APIKey)
+	if err != nil {
+		writeJSON(w, http.StatusOK, ProviderModelsResponse{OK: false, Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, ProviderModelsResponse{OK: true, Models: models})
 }
 
 type ProviderStatusEntry struct {

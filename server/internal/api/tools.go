@@ -1108,6 +1108,7 @@ func (s *Server) toolTriggerHeartbeat(ctx context.Context, userID string) (map[s
 func (s *Server) toolSetupEmail(ctx context.Context, userID string, args map[string]any) (map[string]any, error) {
 	address, _ := args["address"].(string)
 	password, _ := args["password"].(string)
+	address = strings.TrimSpace(strings.ToLower(address))
 	if address == "" {
 		return map[string]any{"success": false, "error": "address is required"}, nil
 	}
@@ -1165,14 +1166,41 @@ func (s *Server) toolSetupEmail(ctx context.Context, userID string, args map[str
 			UseTLS:       true,
 			Enabled:      true,
 		}
-		cfg.Integrations.EmailAccounts = append(cfg.Integrations.EmailAccounts, account)
+
+		// Idempotent upsert by email address to avoid duplicates when
+		// setup form already saved config and the model calls setup_email again.
+		idx := -1
+		for i, acc := range cfg.Integrations.EmailAccounts {
+			if strings.EqualFold(strings.TrimSpace(acc.Address), address) {
+				idx = i
+				break
+			}
+		}
+		if idx >= 0 {
+			cfg.Integrations.EmailAccounts[idx] = account
+		} else {
+			cfg.Integrations.EmailAccounts = append(cfg.Integrations.EmailAccounts, account)
+		}
 
 		if _, err := s.configStore.PutUserConfig(userID, cfg); err != nil {
 			return map[string]any{"success": false, "error": "failed to save config"}, nil
 		}
+
+		// Keep DB inbox rows in sync using upsert semantics as well.
+		if err := s.syncEmailInboxesFromConfig(ctx, userID, cfg.Integrations.EmailAccounts); err != nil {
+			return map[string]any{"success": false, "error": fmt.Sprintf("failed to sync inboxes: %v", err)}, nil
+		}
+
+		return map[string]any{
+			"success":   true,
+			"address":   address,
+			"imap_host": imapHost,
+			"smtp_host": smtpHost,
+			"message":   "Email account configured (upserted). You can now use check_email, read_email, reply_email, compose_email, and search_email.",
+		}, nil
 	}
 
-	// Also save to DB
+	// Fallback path: save directly to DB when config store is unavailable.
 	inbox, err := s.createEmailInbox(ctx, userID, address, imapHost, imapPort, address, password, true, 60)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") {

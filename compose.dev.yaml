@@ -63,8 +63,6 @@ services:
       dockerfile: Dockerfile
       target: runtime-dev
     container_name: opencrow-server-dev
-    env_file:
-      - .env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgres://opencrow:opencrow@postgres:5432/opencrow?sslmode=disable}
       REDIS_ADDR: ${REDIS_ADDR:-redis:6379}
@@ -106,8 +104,6 @@ services:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
     container_name: opencrow-web-dev
-    env_file:
-      - .env
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
       API_INTERNAL_BASE_URL: http://server:8080
@@ -123,6 +119,8 @@ services:
 
 volumes:
   postgres_data_dev:
+    name: ${POSTGRES_VOLUME_NAME:-opencrow_postgres_data}
   server_state_dev:
+    name: ${SERVER_STATE_VOLUME_NAME:-opencrow_server_state}
   web_node_modules_dev:
   web_next_cache_dev:

@@ -124,6 +124,37 @@ var defaultTools = []ToolDefinition{
 	{ID: "remove_mcp_server", Name: "remove_mcp_server", Description: "Remove an MCP server configuration by id, name, or url.", Source: "builtin", Parameters: []ToolParameter{{Name: "id", Type: "string", Description: "MCP server id", Required: false}, {Name: "name", Type: "string", Description: "MCP server name", Required: false}, {Name: "url", Type: "string", Description: "MCP server URL", Required: false}}},
 }
 
+const DefaultSystemPrompt = `You're not a chatbot. You're a personal assistant who grows with your user.
+
+## How to Be
+
+**Be genuinely helpful.** Skip the "Great question!" and "I'd be happy to help!" -- just help. Actions speak louder than filler words.
+
+**Have opinions.** You're allowed to disagree, prefer things, or find stuff interesting. An assistant with no personality is just a search engine with extra steps.
+
+**Be resourceful.** Try to figure it out from context and your memories before asking. Come back with answers, not questions. Use all the tooling you have available to answer questions: MCP servers, the Linux CLI, emails, etc.
+
+**Be concise.** Short and clear by default. Go deeper when the topic calls for it.
+
+## Boundaries
+
+- Respect privacy. Don't repeat sensitive information unnecessarily.
+- When in doubt about an action, ask first.
+- Be honest when you don't know something.`
+
+const LegacyHeartbeatPrompt = `[HEARTBEAT] This is an automatic self-check. Review your memories and pending tasks. If everything looks good and nothing needs attention, respond with exactly: HEARTBEAT_OK
+If something needs attention (stale memories, due tasks, user follow-ups), address it.`
+
+const DefaultHeartbeatPrompt = `[HEARTBEAT] This is an automatic self-check.
+
+Review your memories, pending tasks, and recent context.
+Collect important news relevant to the user (their interests, location, ongoing topics, and priorities), then decide if anything needs attention.
+
+If everything looks good and there is nothing noteworthy, respond with exactly:
+HEARTBEAT_OK
+
+If anything needs attention, respond concisely with what changed and what action is recommended.`
+
 func DefaultUserConfig() UserConfig {
 	toolDefinitions := make([]ToolDefinition, 0, len(defaultTools))
 	toolEnabled := make(map[string]bool, len(defaultTools))
@@ -156,14 +187,14 @@ func DefaultUserConfig() UserConfig {
 		},
 		Skills: SkillsConfig{Entries: []SkillEntry{}},
 		Prompts: PromptsConfig{
-			SystemPrompt:    "You are openCrow, concise and helpful.",
-			HeartbeatPrompt: "Check pending tasks, new emails, and summarize urgent actions.",
+			SystemPrompt:    DefaultSystemPrompt,
+			HeartbeatPrompt: DefaultHeartbeatPrompt,
 		},
 		Memory:    MemoryConfig{Entries: []MemoryEntry{}},
 		Schedules: ScheduleConfig{Entries: []ScheduleEntry{}},
 		Heartbeat: HeartbeatConfig{
-			Enabled:         false,
-			IntervalSeconds: 300,
+			Enabled:         true,
+			IntervalSeconds: 900,
 			ActiveHours: HeartbeatSchedule{
 				Start: "08:00",
 				End:   "22:00",

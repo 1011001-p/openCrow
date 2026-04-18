@@ -290,8 +290,20 @@ func normalize(cfg UserConfig) UserConfig {
 	if cfg.Prompts.SystemPrompt == "" {
 		cfg.Prompts.SystemPrompt = def.Prompts.SystemPrompt
 	}
-	if cfg.Prompts.HeartbeatPrompt == "" {
+	legacyHeartbeatPrompt := strings.TrimSpace(LegacyHeartbeatPrompt)
+	currentHeartbeatPrompt := strings.TrimSpace(cfg.Prompts.HeartbeatPrompt)
+	isLegacyDefaultPrompt := currentHeartbeatPrompt == legacyHeartbeatPrompt ||
+		(strings.Contains(currentHeartbeatPrompt, "This is an automatic self-check") &&
+			strings.Contains(currentHeartbeatPrompt, "respond with exactly: HEARTBEAT_OK"))
+	if currentHeartbeatPrompt == "" || isLegacyDefaultPrompt {
 		cfg.Prompts.HeartbeatPrompt = def.Prompts.HeartbeatPrompt
+		// Migrate legacy heartbeat defaults for users that still have the old heartbeat prompt untouched.
+		if cfg.Heartbeat.IntervalSeconds == 300 {
+			cfg.Heartbeat.IntervalSeconds = def.Heartbeat.IntervalSeconds
+		}
+		if !cfg.Heartbeat.Enabled {
+			cfg.Heartbeat.Enabled = def.Heartbeat.Enabled
+		}
 	}
 
 	if cfg.UpdatedAt == "" {

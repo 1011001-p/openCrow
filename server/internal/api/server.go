@@ -211,6 +211,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /v1/config", s.requireAccessToken(http.HandlerFunc(s.handleGetUserConfig)))
 	s.mux.Handle("PUT /v1/config", s.requireAccessToken(http.HandlerFunc(s.handlePutUserConfig)))
 	s.mux.Handle("POST /v1/providers/test", s.requireAccessToken(http.HandlerFunc(s.handleTestProvider)))
+	s.mux.Handle("POST /v1/providers/models", s.requireAccessToken(http.HandlerFunc(s.handleProbeProviderModels)))
 	s.mux.Handle("GET /v1/providers/status", s.requireAccessToken(http.HandlerFunc(s.handleProvidersStatus)))
 	s.mux.Handle("GET /v1/tools", s.requireAccessToken(http.HandlerFunc(s.handleGetToolsConfig)))
 	s.mux.Handle("PUT /v1/tools", s.requireAccessToken(http.HandlerFunc(s.handlePutToolsConfig)))

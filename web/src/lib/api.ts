@@ -370,6 +370,12 @@ export interface MCPServerTestResult {
   tools?: MCPToolSummary[];
 }
 
+export interface ProviderModelsProbeResult {
+  ok: boolean;
+  models?: string[];
+  error?: string;
+}
+
 export interface UserConfig {
   integrations: { emailAccounts: EmailAccountConfig[] };
   tools: {
@@ -540,6 +546,11 @@ export const endpoints = {
 
   testProvider: (provider: { kind: string; name: string; baseUrl: string; apiKeyRef: string; model: string }) =>
     api<{ ok: boolean; latencyMs: number; error?: string; model?: string }>("/v1/providers/test", {
+      method: "POST",
+      body: JSON.stringify(provider),
+    }),
+  probeProviderModels: (provider: { kind: string; baseUrl: string; apiKeyRef: string }) =>
+    api<ProviderModelsProbeResult>("/v1/providers/models", {
       method: "POST",
       body: JSON.stringify(provider),
     }),

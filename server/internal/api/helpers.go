@@ -139,7 +139,7 @@ type sessionRow struct {
 // buildSystemPrompt constructs the full system prompt by appending any stored
 // memories as a context section below the configured system prompt.
 func (s *Server) buildSystemPrompt(ctx context.Context, userID string, cfg *configstore.UserConfig) string {
-	base := "You are openCrow, a concise and helpful AI assistant.\n\nWhen you use tools, the user can already see the full tool call and its raw output displayed in the UI. Do NOT repeat or quote the raw tool output in your response. Instead, just interpret the result and give a direct, natural-language answer -- one or two sentences unless more detail is clearly needed."
+	base := configstore.DefaultSystemPrompt
 	if cfg != nil && cfg.Prompts.SystemPrompt != "" {
 		base = cfg.Prompts.SystemPrompt
 	}

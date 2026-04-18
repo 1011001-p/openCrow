@@ -66,6 +66,40 @@ function automationLabel(kind?: string) {
   }
 }
 
+type SidebarNavButtonProps = {
+  section: Section;
+  icon: React.ReactNode;
+  label: string;
+  activeSection: Section;
+  setActiveSection: (section: Section) => void;
+  setRequestedConfigTab: (tab: string | undefined) => void;
+};
+
+function SidebarNavButton({
+  section,
+  icon,
+  label,
+  activeSection,
+  setActiveSection,
+  setRequestedConfigTab,
+}: SidebarNavButtonProps) {
+  const active = activeSection === section;
+  return (
+    <button
+      onClick={() => {
+        if (section === "config") setRequestedConfigTab(undefined);
+        setActiveSection(section);
+      }}
+      className={`flex w-full items-center gap-3 rounded-sm px-4 py-2.5 text-sm transition-colors duration-150 ${
+        active ? "text-violet-light" : "text-on-surface-variant hover:bg-surface-mid/50 hover:text-on-surface"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
 export default function AuthenticatedApp() {
   const [activeSection, setActiveSection] = useState<Section>("chat");
   const [requestedConfigTab, setRequestedConfigTab] = useState<string | undefined>(undefined);
@@ -106,32 +140,6 @@ export default function AuthenticatedApp() {
   const visibleConversations = showSystemChats
     ? conversations
     : conversations.filter((chat) => !chat.isAutomatic || chat.automationKind === "heartbeat");
-
-  function SidebarButton({
-    section,
-    icon,
-    label,
-  }: {
-    section: Section;
-    icon: React.ReactNode;
-    label: string;
-  }) {
-    const active = activeSection === section;
-    return (
-      <button
-        onClick={() => {
-          if (section === "config") setRequestedConfigTab(undefined);
-          setActiveSection(section);
-        }}
-        className={`flex w-full items-center gap-3 rounded-sm px-4 py-2.5 text-sm transition-colors duration-150 ${
-          active ? "text-violet-light" : "text-on-surface-variant hover:bg-surface-mid/50 hover:text-on-surface"
-        }`}
-      >
-        {icon}
-        {label}
-      </button>
-    );
-  }
 
   return (
     <div className="h-screen overflow-hidden bg-surface">
@@ -286,9 +294,30 @@ export default function AuthenticatedApp() {
 
         {/* Bottom actions */}
         <div className="relative border-t border-outline-ghost px-2 py-3 space-y-0.5">
-          <SidebarButton section="overview" icon={<OverviewIcon />} label="Overview" />
-          <SidebarButton section="terminal" icon={<TerminalIcon />} label="Terminal" />
-          <SidebarButton section="config" icon={<GearIcon />} label="Config" />
+          <SidebarNavButton
+            section="overview"
+            icon={<OverviewIcon />}
+            label="Overview"
+            activeSection={activeSection}
+            setActiveSection={setActiveSection}
+            setRequestedConfigTab={setRequestedConfigTab}
+          />
+          <SidebarNavButton
+            section="terminal"
+            icon={<TerminalIcon />}
+            label="Terminal"
+            activeSection={activeSection}
+            setActiveSection={setActiveSection}
+            setRequestedConfigTab={setRequestedConfigTab}
+          />
+          <SidebarNavButton
+            section="config"
+            icon={<GearIcon />}
+            label="Config"
+            activeSection={activeSection}
+            setActiveSection={setActiveSection}
+            setRequestedConfigTab={setRequestedConfigTab}
+          />
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-sm px-4 py-2.5 text-sm text-on-surface-variant transition-colors duration-150 hover:text-error"

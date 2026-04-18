@@ -591,7 +591,7 @@ WHERE user_id = $1::uuid;
 }
 
 func buildHeartbeatExecutionPrompt(cfg *configstore.UserConfig, resolvedTZ string) string {
-	base := "Provide a brief status update. Note the current time, any pending tasks, and confirm you are operational. Reply with exactly HEARTBEAT_OK if everything is fine and there is nothing noteworthy to report. If there is anything notable, reply with a concise explanation instead."
+	base := configstore.DefaultHeartbeatPrompt
 	if cfg != nil && strings.TrimSpace(cfg.Prompts.HeartbeatPrompt) != "" {
 		base = strings.TrimSpace(cfg.Prompts.HeartbeatPrompt)
 	}

@@ -66,6 +66,7 @@ type SetupFormType = "email_setup" | "mcp_setup";
 
 type SetupFormPayload = {
   form: SetupFormType;
+  id?: string;
   title?: string;
   description?: string;
   submitLabel?: string;
@@ -105,6 +106,13 @@ function parseSetupForms(content: string): RichMessagePart[] {
   return parts;
 }
 
+function setupFormKey(payload: SetupFormPayload, idx: number, messageId: string): string {
+  if (payload.id && String(payload.id).trim()) return `setup-form-${messageId}-${payload.id}`;
+  const title = String(payload.title ?? "").trim();
+  const kind = payload.form;
+  return `setup-form-${messageId}-${kind}-${title || idx}`;
+}
+
 function MarkdownMessage({ content, compact = false }: { content: string; compact?: boolean }) {
   return (
     <ReactMarkdown
@@ -139,17 +147,43 @@ function MarkdownMessage({ content, compact = false }: { content: string; compac
   );
 }
 
-function RichAssistantContent({ content, compact = false }: { content: string; compact?: boolean }) {
+function RichAssistantContent({
+  content,
+  compact = false,
+  messageId,
+  conversationId,
+  onSubmitSetupForm,
+  hiddenForms,
+  onHideForm,
+}: {
+  content: string;
+  compact?: boolean;
+  messageId: string;
+  conversationId: string | null;
+  onSubmitSetupForm: (followupMessage: string) => Promise<void>;
+  hiddenForms: Set<string>;
+  onHideForm: (formId: string) => void;
+}) {
   const parts = parseSetupForms(content);
   return (
     <>
-      {parts.map((part, idx) =>
-        part.kind === "setup-form" ? (
-          <SetupForm key={`setup-form-${idx}`} payload={part.payload} />
-        ) : (
-          <MarkdownMessage key={`md-${idx}`} content={part.content} compact={compact} />
-        )
-      )}
+      {parts.map((part, idx) => {
+        if (part.kind === "setup-form") {
+          const formId = setupFormKey(part.payload, idx, messageId);
+          if (hiddenForms.has(formId)) return null;
+          return (
+            <SetupForm
+              key={formId}
+              formId={formId}
+              payload={part.payload}
+              conversationId={conversationId}
+              onSubmitSetupForm={onSubmitSetupForm}
+              onHideForm={onHideForm}
+            />
+          );
+        }
+        return <MarkdownMessage key={`md-${idx}`} content={part.content} compact={compact} />;
+      })}
     </>
   );
 }
@@ -178,7 +212,48 @@ function parseHeadersFromText(value: string): Record<string, string> {
   return out;
 }
 
-function SetupForm({ payload }: { payload: SetupFormPayload }) {
+function buildSetupFormFollowupMessage(payload: SetupFormPayload, values: Record<string, string>): string {
+  if (payload.form === "email_setup") {
+    return [
+      "Setup form submitted and saved.",
+      "Please continue the email integration now using the saved config.",
+      "",
+      `Account label: ${values.label?.trim() || "(none)"}`,
+      `Address: ${values.address?.trim() || "(none)"}`,
+      `IMAP host: ${values.imapHost?.trim() || "(none)"}:${values.imapPort?.trim() || "993"}`,
+      `SMTP host: ${values.smtpHost?.trim() || "(none)"}:${values.smtpPort?.trim() || "587"}`,
+      `TLS: ${values.tls?.trim() || "true"}`,
+      `Enabled: ${values.enabled?.trim() || "true"}`,
+      "",
+      "Do not ask for the same setup fields again unless strictly required.",
+    ].join("\n");
+  }
+
+  return [
+    "Setup form submitted and saved.",
+    "Please continue MCP setup now using the saved config.",
+    "",
+    `Server name: ${values.name?.trim() || "(none)"}`,
+    `URL: ${values.url?.trim() || "(none)"}`,
+    `Enabled: ${values.enabled?.trim() || "true"}`,
+    "",
+    "Test discovery/capabilities and proceed without asking for the same setup fields again unless strictly required.",
+  ].join("\n");
+}
+
+function SetupForm({
+  formId,
+  payload,
+  conversationId,
+  onSubmitSetupForm,
+  onHideForm,
+}: {
+  formId: string;
+  payload: SetupFormPayload;
+  conversationId: string | null;
+  onSubmitSetupForm: (followupMessage: string) => Promise<void>;
+  onHideForm: (formId: string) => void;
+}) {
   const defaults = payload.defaults ?? {};
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string>("");
@@ -252,6 +327,18 @@ function SetupForm({ payload }: { payload: SetupFormPayload }) {
         else cfg.mcp.servers.push(server);
       }
       await endpoints.putConfig(cfg);
+
+      if (conversationId) {
+        setStatus("Saved. Asking assistant to continue...");
+        await onSubmitSetupForm(buildSetupFormFollowupMessage(payload, values));
+      }
+
+      try {
+        window.localStorage.setItem(`oc:setup-form:hidden:${formId}`, "1");
+      } catch {
+        // ignore localStorage failures
+      }
+      onHideForm(formId);
       setStatus("Saved :white_check_mark:");
     } catch (e) {
       setStatus(e instanceof Error ? `Failed: ${e.message}` : "Failed to save");
@@ -261,7 +348,7 @@ function SetupForm({ payload }: { payload: SetupFormPayload }) {
   };
 
   return (
-    <div className="rounded-xl border border-violet/30 bg-violet/8 p-3 my-2">
+    <div className="rounded-xl border p-3 my-2 border-violet/30 bg-violet/8">
       <p className="text-xs uppercase tracking-wide text-violet font-mono">Setup Form</p>
       <p className="text-sm font-semibold text-on-surface mt-1">{payload.title || (payload.form === "email_setup" ? "Email Setup" : "MCP Setup")}</p>
       {payload.description && <p className="text-xs text-on-surface-variant mt-1">{payload.description}</p>}
@@ -349,6 +436,8 @@ export default function ChatShell({
   const [attachedFiles, setAttachedFiles] = useState<{ file: File; dataUrl: string }[]>([]);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [setupFormBusy, setSetupFormBusy] = useState(false);
+  const [hiddenSetupForms, setHiddenSetupForms] = useState<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const composeRef = useRef<HTMLTextAreaElement>(null);
@@ -456,6 +545,110 @@ export default function ChatShell({
       setRegeneratingId(null);
     }
   }, [regeneratingId]);
+
+  const handleSetupFormSubmitted = useCallback(async (followupMessage: string) => {
+    if (!activeConversationId) throw new Error("No active conversation");
+    if (sending || setupFormBusy) throw new Error("Please wait for the current response to finish");
+
+    setSetupFormBusy(true);
+    const conversationId = activeConversationId;
+    const optimisticUser: MessageDTO = {
+      id: `temp-setup-${Date.now()}`,
+      conversationId,
+      role: "user",
+      content: followupMessage,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimisticUser]);
+
+    try {
+      const savedUser = await endpoints.createMessage(conversationId, "user", followupMessage);
+      setMessages((prev) => prev.map((m) => (m.id === optimisticUser.id ? savedUser : m)));
+
+      const streamId = `stream-setup-${Date.now()}`;
+      setStreamingMsgId(streamId);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: streamId,
+          conversationId,
+          role: "assistant",
+          content: "",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+
+      const providerOrder = selectedProvider ? [selectedProvider] : undefined;
+      let fullOutput = "";
+      const finalOutput = await endpoints.streamComplete(
+        conversationId,
+        followupMessage,
+        (token: string) => {
+          fullOutput += token;
+          setMessages((prev) => prev.map((m) => (m.id === streamId ? { ...m, content: fullOutput } : m)));
+        },
+        providerOrder,
+        (name: string, args: string) => {
+          setToolCallHistory((prev) => [
+            ...prev,
+            {
+              id: `live-${Date.now()}-${Math.random()}`,
+              toolName: name,
+              arguments: (() => {
+                try {
+                  return JSON.parse(args);
+                } catch {
+                  return {};
+                }
+              })(),
+              createdAt: new Date().toISOString(),
+            },
+          ]);
+        }
+      );
+      setStreamingMsgId(null);
+      if (finalOutput && finalOutput !== fullOutput) {
+        setMessages((prev) => prev.map((m) => (m.id === streamId ? { ...m, content: finalOutput } : m)));
+      }
+      endpoints.getToolCalls(conversationId).then((calls) => setToolCallHistory(calls ?? [])).catch(() => {});
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err-setup-${Date.now()}`,
+          conversationId,
+          role: "system",
+          content: `Setup saved, but assistant follow-up failed: ${msg}`,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      throw e instanceof Error ? e : new Error(msg);
+    } finally {
+      setSetupFormBusy(false);
+      setStreamingMsgId(null);
+    }
+  }, [activeConversationId, selectedProvider, sending, setupFormBusy]);
+
+  useEffect(() => {
+    const hidden = new Set<string>();
+    for (const msg of messages) {
+      if (msg.role !== "assistant") continue;
+      const parts = parseSetupForms(msg.content);
+      parts.forEach((part, idx) => {
+        if (part.kind !== "setup-form") return;
+        const formId = setupFormKey(part.payload, idx, msg.id);
+        try {
+          if (window.localStorage.getItem(`oc:setup-form:hidden:${formId}`) === "1") {
+            hidden.add(formId);
+          }
+        } catch {
+          // ignore localStorage failures
+        }
+      });
+    }
+    setHiddenSetupForms(hidden);
+  }, [messages]);
 
   // ─── Send message ───
   const handleSend = useCallback(async () => {
@@ -822,7 +1015,14 @@ export default function ChatShell({
                         {msg.role === "assistant" && msg.id === streamingMsgId && msg.content === "" ? (
                           <Spinner size="sm" />
                         ) : msg.role === "assistant" ? (
-                          <RichAssistantContent content={msg.content} />
+                          <RichAssistantContent
+                            content={msg.content}
+                            messageId={msg.id}
+                            conversationId={activeConversationId}
+                            onSubmitSetupForm={handleSetupFormSubmitted}
+                            hiddenForms={hiddenSetupForms}
+                            onHideForm={(formId) => setHiddenSetupForms((prev) => new Set(prev).add(formId))}
+                          />
                         ) : (
                           <MarkdownMessage content={msg.content} compact />
                         )}
