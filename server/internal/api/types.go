@@ -143,6 +143,13 @@ type CompleteResponse struct {
 	Output   string                  `json:"output"`
 	Attempts int                     `json:"attempts"`
 	Trace    CompletionTraceResponse `json:"trace"`
+	Usage    *TokenUsageDTO          `json:"usage,omitempty"`
+}
+
+type TokenUsageDTO struct {
+	PromptTokens     int `json:"promptTokens"`
+	CompletionTokens int `json:"completionTokens"`
+	TotalTokens      int `json:"totalTokens"`
 }
 
 type CompletionTraceResponse struct {

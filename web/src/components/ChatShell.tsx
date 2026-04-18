@@ -8,6 +8,7 @@ import {
   type MessageDTO,
   type ProviderConfig,
   type ToolCallRecord,
+  type TokenUsage,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 // Input import removed - using plain input in composer
@@ -166,6 +167,7 @@ export default function ChatShell({
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [sending, setSending] = useState(false);
+  const [lastUsage, setLastUsage] = useState<TokenUsage | null>(null);
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
@@ -374,6 +376,9 @@ export default function ChatShell({
               createdAt: new Date().toISOString(),
             },
           ]);
+        },
+        (usage: TokenUsage) => {
+          setLastUsage(usage);
         },
       );
       setStreamingMsgId(null);
@@ -780,6 +785,13 @@ export default function ChatShell({
                   Send
                 </Button>
               </div>
+              {lastUsage && (
+                <div className="flex justify-end px-1 pt-0.5">
+                  <span className="text-xs text-on-surface-variant font-mono opacity-60">
+                    ^{lastUsage.promptTokens} v{lastUsage.completionTokens} Σ{lastUsage.totalTokens}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

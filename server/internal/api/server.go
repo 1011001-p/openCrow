@@ -37,6 +37,7 @@ type Server struct {
 	workerLogs          WorkerLogStore
 	termMgr             *TerminalSessionManager
 	skillStore          *SkillStore
+	whisper             *WhisperManager
 }
 
 // WorkerStatusStore tracks runtime health of background workers.
@@ -132,6 +133,8 @@ type Options struct {
 	AdminPasswordBcrypt string
 	ServerShellTimeout  time.Duration
 	StateDir            string
+	WhisperModel        string
+	WhisperEndpoint     string
 }
 
 func NewServer(env string, db *pgxpool.Pool, authMgr *auth.Manager, cfgStore *configstore.Store, opts Options) *Server {
@@ -159,6 +162,7 @@ func NewServer(env string, db *pgxpool.Pool, authMgr *auth.Manager, cfgStore *co
 		serverShellTimeout:  opts.ServerShellTimeout,
 		termMgr:             NewTerminalSessionManager(),
 		skillStore:          NewSkillStore(opts.StateDir),
+		whisper:             NewWhisperManager(opts.WhisperEndpoint, opts.WhisperModel),
 	}
 
 	s.routes()

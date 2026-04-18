@@ -14,7 +14,7 @@ func TestStubProvider(t *testing.T) {
 		t.Errorf("Name() = %q", p.Name())
 	}
 	msgs := []ChatMessage{{Role: "user", Content: "hello"}}
-	out, toolCalls, err := p.Chat(context.Background(), "", msgs, nil)
+	out, toolCalls, _, err := p.Chat(context.Background(), "", msgs, nil)
 	if err != nil {
 		t.Fatalf("Chat: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestStubProviderCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	p := StubProvider{ProviderName: "x"}
-	_, _, err := p.Chat(ctx, "", []ChatMessage{{Role: "user", Content: "hi"}}, nil)
+	_, _, _, err := p.Chat(ctx, "", []ChatMessage{{Role: "user", Content: "hi"}}, nil)
 	if err == nil {
 		t.Error("expected error on cancelled ctx")
 	}
@@ -67,19 +67,19 @@ func TestServiceCompleteEmptyMessages(t *testing.T) {
 type failProvider struct{ name string }
 
 func (f failProvider) Name() string { return f.name }
-func (f failProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, error) {
-	return "", nil, errors.New("fail")
+func (f failProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, TokenUsage, error) {
+	return "", nil, TokenUsage{}, errors.New("fail")
 }
 
 type repeatToolProvider struct{}
 
 func (p repeatToolProvider) Name() string { return "repeat" }
-func (p repeatToolProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, error) {
+func (p repeatToolProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, TokenUsage, error) {
 	return "", []ToolCall{{
 		ID:        "tc-1",
 		Name:      "send_email",
 		Arguments: map[string]any{"to": "a@example.com", "subject": "Current Time"},
-	}}, nil
+	}}, TokenUsage{}, nil
 }
 
 func TestServiceCompleteFallback(t *testing.T) {

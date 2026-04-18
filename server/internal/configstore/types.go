@@ -35,9 +35,10 @@ type SkillEntry struct {
 }
 
 type IntegrationsConfig struct {
-	EmailAccounts []EmailAccountConfig `json:"emailAccounts"`
-	TelegramBots  []TelegramBotConfig  `json:"telegramBots"`
-	SSHServers    []SSHServerConfig    `json:"sshServers"`
+	EmailAccounts            []EmailAccountConfig `json:"emailAccounts"`
+	TelegramBots             []TelegramBotConfig  `json:"telegramBots"`
+	SSHServers               []SSHServerConfig    `json:"sshServers"`
+	DefaultNotificationBotID string               `json:"defaultNotificationBotId,omitempty"`
 }
 
 type SSHServerConfig struct {

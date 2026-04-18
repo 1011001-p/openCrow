@@ -1158,10 +1158,16 @@ function TelegramBotCard({
   bot,
   index: i,
   updateConfig,
+  isDefault,
+  canToggleOff,
+  onSetDefault,
 }: {
   bot: TelegramBotConfig;
   index: number;
   updateConfig: UpdateConfigFn;
+  isDefault: boolean;
+  canToggleOff: boolean;
+  onSetDefault: () => void;
 }) {
   const configured = !!(bot.botToken);
   const [expanded, setExpanded] = useState(!configured);
@@ -1198,6 +1204,9 @@ function TelegramBotCard({
       >
         <AnimatedDot status={testing ? "pending" : testResult ? (testResult.ok ? "ok" : "error") : (bot.enabled ? "ok" : "idle")} />
         <span className="font-medium text-sm flex-1 truncate">{bot.label || `Bot ${i + 1}`}</span>
+        {isDefault && (
+          <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-violet/15 text-violet-light">default</span>
+        )}
         {bot.botToken && <span className="text-xs text-on-surface-variant font-mono hidden sm:block">token set</span>}
         {testResult && (
           <span className={`flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 rounded ${testResult.ok ? "text-cyan bg-cyan/10" : "text-error bg-error/10"}`}>
@@ -1237,7 +1246,17 @@ function TelegramBotCard({
               {testResult.error && <p className="text-xs mt-1 opacity-90">{testResult.error}</p>}
             </div>
           )}
-          <div className="flex gap-2 pt-2 items-center">
+          <div className="flex gap-2 pt-2 items-center flex-wrap">
+            <Toggle label="Enabled" checked={bot.enabled} onChange={(v) => updateConfig((c) => { c.integrations.telegramBots[i].enabled = v; return c; })} />
+            <Toggle
+              label="Default"
+              checked={isDefault}
+              onChange={(v) => {
+                if (v) onSetDefault();
+                // Cannot turn off if canToggleOff is false (only one bot, or is last default)
+              }}
+              disabled={isDefault && !canToggleOff}
+            />
             <Toggle label="Enabled" checked={bot.enabled} onChange={(v) => updateConfig((c) => { c.integrations.telegramBots[i].enabled = v; return c; })} />
             <Button variant="secondary" size="sm" loading={testing} onClick={handleTest} disabled={!bot.botToken} className="ml-4">
               Test bot
@@ -1283,11 +1302,27 @@ function TelegramTab({
         }
       />
       {config.integrations.telegramBots.map((bot, i) => (
-        <TelegramBotCard key={i} bot={bot} index={i} updateConfig={updateConfig} />
+        <TelegramBotCard
+          key={i}
+          bot={bot}
+          index={i}
+          updateConfig={updateConfig}
+          isDefault={
+            config.integrations.telegramBots.length === 1
+              ? true
+              : config.integrations.defaultNotificationBotId === bot.id
+          }
+          canToggleOff={config.integrations.telegramBots.length > 1}
+          onSetDefault={() => updateConfig((c) => {
+            c.integrations.defaultNotificationBotId = bot.id ?? "";
+            return c;
+          })}
+        />
       ))}
       {config.integrations.telegramBots.length === 0 && (
         <p className="text-on-surface-variant text-sm">No Telegram bots configured.</p>
       )}
+      {/* Default Notification Bot section removed - managed via Default toggle in each card */}
       <SaveBar onClick={saveFullConfig} loading={saving} label="Save Telegram Config" status={saveStatus} />
     </div>
   );

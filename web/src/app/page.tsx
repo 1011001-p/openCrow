@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { endpoints, setTokens, isAuthenticated } from "@/lib/api";
+import { endpoints, setTokens, isAuthenticated, setAuthFailureHandler } from "@/lib/api";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -31,6 +31,7 @@ export default function HomePage() {
   useEffect(() => {
     setAuthed(isAuthenticated());
     setDevice(navigator.userAgent.slice(0, 64) || "Web Browser");
+    setAuthFailureHandler(() => setAuthed(false));
   }, []);
 
   // Fetch health
@@ -44,7 +45,7 @@ export default function HomePage() {
   }, [authed]);
 
   if (authed === null) return null;
-  if (authed) return <AuthenticatedApp />;
+  if (authed) return <AuthenticatedApp onLogout={() => setAuthed(false)} />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

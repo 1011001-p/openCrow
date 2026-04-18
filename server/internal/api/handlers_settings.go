@@ -159,7 +159,7 @@ func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	start := time.Now()
-	_, _, err := prov.Chat(ctx, "", []orchestrator.ChatMessage{{Role: "user", Content: "Respond with exactly: OK"}}, nil)
+	_, _, _, err := prov.Chat(ctx, "", []orchestrator.ChatMessage{{Role: "user", Content: "Respond with exactly: OK"}}, nil)
 	latency := time.Since(start).Milliseconds()
 
 	if err != nil {
@@ -337,7 +337,7 @@ func (s *Server) handleProvidersStatus(w http.ResponseWriter, r *http.Request) {
 				entry.Error = "unknown provider kind"
 			} else {
 				start := time.Now()
-				_, _, probeErr := prov.Chat(ctx, "", []orchestrator.ChatMessage{{Role: "user", Content: "Respond with exactly: OK"}}, nil)
+				_, _, _, probeErr := prov.Chat(ctx, "", []orchestrator.ChatMessage{{Role: "user", Content: "Respond with exactly: OK"}}, nil)
 				entry.LatencyMs = time.Since(start).Milliseconds()
 				if probeErr != nil {
 					entry.Error = probeErr.Error()

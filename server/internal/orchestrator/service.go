@@ -91,6 +91,7 @@ type CompletionResult struct {
 	Output   string
 	Attempts int
 	Trace    CompletionTrace
+	Usage    TokenUsage
 }
 
 type ToolLoopGuard struct {
@@ -168,7 +169,7 @@ func (s *Service) Complete(ctx context.Context, req CompletionRequest) (Completi
 			attemptNo := i + 1
 
 			// Tool loop with this provider
-			output, toolCalls, err := s.runWithTools(ctx, provider, req.System, trimmedMessages, req.Tools, req.ToolExecutor, &trace)
+			output, toolCalls, usage, err := s.runWithTools(ctx, provider, req.System, trimmedMessages, req.Tools, req.ToolExecutor, &trace)
 			if err == nil {
 				trace.ProviderAttempts = append(trace.ProviderAttempts, ProviderAttempt{
 					Provider: provider.Name(),
@@ -176,7 +177,7 @@ func (s *Service) Complete(ctx context.Context, req CompletionRequest) (Completi
 					Success:  true,
 				})
 				_ = toolCalls
-				return CompletionResult{Provider: provider.Name(), Output: output, Attempts: attempts, Trace: trace}, nil
+				return CompletionResult{Provider: provider.Name(), Output: output, Attempts: attempts, Trace: trace, Usage: usage}, nil
 			}
 			trace.ProviderAttempts = append(trace.ProviderAttempts, ProviderAttempt{
 				Provider: provider.Name(),
@@ -209,39 +210,41 @@ func (s *Service) runWithTools(
 	tools []ToolSpec,
 	executor func(ctx context.Context, name string, args map[string]any) (string, error),
 	trace *CompletionTrace,
-) (string, []ToolCall, error) {
+) (string, []ToolCall, TokenUsage, error) {
 	guard := s.guard
 	msgs := append([]ChatMessage{}, baseMessages...)
 	repeatedToolCallCount := map[string]int{}
 	lastToolResultsBySignature := map[string][]ToolCall{}
+	var accumulatedUsage TokenUsage
 
 	for iteration := 0; iteration < guard.MaxIterations; iteration++ {
-		text, toolCalls, err := provider.Chat(ctx, system, msgs, tools)
+		text, toolCalls, usage, err := provider.Chat(ctx, system, msgs, tools)
+		accumulatedUsage.Add(usage)
 		if err != nil {
-			return "", nil, err
+			return "", nil, accumulatedUsage, err
 		}
 
 		// No tool calls: we have a final answer
 		if len(toolCalls) == 0 {
-			return text, nil, nil
+			return text, nil, accumulatedUsage, nil
 		}
 
 		if err := validateToolCalls(toolCalls, tools, trace); err != nil {
-			return "", nil, err
+			return "", nil, accumulatedUsage, err
 		}
 
 		signature := toolCallSignature(toolCalls)
 		repeatedToolCallCount[signature]++
 		if repeatedToolCallCount[signature] > guard.MaxRepeated {
 			if synthesized, ok := synthesizeRepeatedToolResult(lastToolResultsBySignature[signature]); ok {
-				return synthesized, lastToolResultsBySignature[signature], nil
+				return synthesized, lastToolResultsBySignature[signature], accumulatedUsage, nil
 			}
-			return "", nil, fmt.Errorf("tool loop repeated same tool call pattern more than %d times", guard.MaxRepeated)
+			return "", nil, accumulatedUsage, fmt.Errorf("tool loop repeated same tool call pattern more than %d times", guard.MaxRepeated)
 		}
 
 		// No executor: return the text as-is (or empty)
 		if executor == nil {
-			return text, toolCalls, nil
+			return text, toolCalls, accumulatedUsage, nil
 		}
 
 		// Build the assistant message with tool_calls
@@ -276,7 +279,7 @@ func (s *Service) runWithTools(
 		lastToolResultsBySignature[signature] = executedCalls
 	}
 
-	return "", nil, fmt.Errorf("tool loop exceeded max iterations (%d)", guard.MaxIterations)
+	return "", nil, accumulatedUsage, fmt.Errorf("tool loop exceeded max iterations (%d)", guard.MaxIterations)
 }
 
 func validateToolCalls(toolCalls []ToolCall, tools []ToolSpec, trace *CompletionTrace) error {
@@ -397,17 +400,17 @@ type StubProvider struct {
 
 func (p StubProvider) Name() string { return p.ProviderName }
 
-func (p StubProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, error) {
+func (p StubProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, TokenUsage, error) {
 	select {
 	case <-ctx.Done():
-		return "", nil, ctx.Err()
+		return "", nil, TokenUsage{}, ctx.Err()
 	case <-time.After(10 * time.Millisecond):
 	}
 	last := ""
 	if len(messages) > 0 {
 		last = messages[len(messages)-1].Content
 	}
-	return "stub: " + truncate(last, 80), nil, nil
+	return "stub: " + truncate(last, 80), nil, TokenUsage{}, nil
 }
 
 func truncate(input string, max int) string {

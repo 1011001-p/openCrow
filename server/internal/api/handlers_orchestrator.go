@@ -158,12 +158,20 @@ func (s *Server) handleOrchestratorComplete(w http.ResponseWriter, r *http.Reque
 		})
 	}
 
-	writeJSON(w, http.StatusOK, CompleteResponse{
+	resp := CompleteResponse{
 		Provider: result.Provider,
 		Output:   result.Output,
 		Attempts: result.Attempts,
 		Trace:    trace,
-	})
+	}
+	if !result.Usage.IsZero() {
+		resp.Usage = &TokenUsageDTO{
+			PromptTokens:     result.Usage.PromptTokens,
+			CompletionTokens: result.Usage.CompletionTokens,
+			TotalTokens:      result.Usage.TotalTokens,
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // buildToolExecutor is defined in tools.go
@@ -345,7 +353,15 @@ func (s *Server) handleOrchestratorStream(w http.ResponseWriter, r *http.Request
 			return
 		}
 		fullOutput = result.Output
-		sendEvent("done", map[string]string{"output": fullOutput})
+		donePayload := map[string]any{"output": fullOutput}
+		if !result.Usage.IsZero() {
+			donePayload["usage"] = map[string]int{
+				"promptTokens":     result.Usage.PromptTokens,
+				"completionTokens": result.Usage.CompletionTokens,
+				"totalTokens":      result.Usage.TotalTokens,
+			}
+		}
+		sendEvent("done", donePayload)
 	} else {
 		sendEvent("error", map[string]string{"error": "no providers configured"})
 		return

@@ -3,11 +3,14 @@ package api
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -35,6 +38,11 @@ func (s *Server) StartWorkers(ctx context.Context) {
 	go s.runHeartbeatWorker(ctx)
 	go s.runEmailWorker(ctx)
 	go s.runTelegramWorker(ctx)
+	go func() {
+		if err := s.whisper.EnsureReady(ctx); err != nil {
+			s.wlog("whisper", "[whisper] setup failed: %v", err)
+		}
+	}()
 }
 
 // ------------------------------------------------------------
@@ -888,10 +896,27 @@ type tgUpdate struct {
 }
 
 type tgMessage struct {
-	MessageID int64  `json:"message_id"`
-	Text      string `json:"text"`
-	Chat      tgChat `json:"chat"`
-	From      tgUser `json:"from"`
+	MessageID int64          `json:"message_id"`
+	Text      string         `json:"text"`
+	Caption   string         `json:"caption"`
+	Photo     []tgPhotoSize  `json:"photo"`
+	Voice     *tgVoice       `json:"voice"`
+	Chat      tgChat         `json:"chat"`
+	From      tgUser         `json:"from"`
+}
+
+type tgPhotoSize struct {
+	FileID   string `json:"file_id"`
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
+	FileSize int    `json:"file_size"`
+}
+
+type tgVoice struct {
+	FileID   string `json:"file_id"`
+	Duration int    `json:"duration"`
+	MimeType string `json:"mime_type"`
+	FileSize int    `json:"file_size"`
 }
 
 type tgChat struct {
@@ -935,40 +960,127 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 		if upd.UpdateID > lastID {
 			lastID = upd.UpdateID
 		}
-		if upd.Message.Text == "" {
+
+		msg := upd.Message
+		hasText := msg.Text != ""
+		hasPhoto := len(msg.Photo) > 0
+		hasVoice := msg.Voice != nil
+
+		// Skip updates with no actionable content
+		if !hasText && !hasPhoto && !hasVoice {
 			continue
 		}
-		chatIDStr := fmt.Sprintf("%d", upd.Message.Chat.ID)
+
+		chatIDStr := fmt.Sprintf("%d", msg.Chat.ID)
 		if len(allowedSet) > 0 && !allowedSet[chatIDStr] {
 			s.wlog("telegram-worker", "[telegram-worker] ignoring message from disallowed chat %s", chatIDStr)
 			continue
 		}
 
-		// Handle /new command: clear context signal (just send confirmation; no orchestrator call)
-		if strings.TrimSpace(upd.Message.Text) == "/new" {
+		// Handle /new command
+		if strings.TrimSpace(msg.Text) == "/new" {
 			s.wlog("telegram-worker", "[telegram-worker] /new command from chat %s -- sending confirmation", chatIDStr)
-			if sendErr := s.sendTelegramMessage(ctx, bot.BotToken, upd.Message.Chat.ID, "New conversation started. What's on your mind?"); sendErr != nil {
+			if sendErr := s.sendTelegramMessage(ctx, bot.BotToken, msg.Chat.ID, ":white_check_mark: New conversation started. What's on your mind?"); sendErr != nil {
 				s.wlog("telegram-worker", "[telegram-worker] failed to send /new confirmation to chat %s: %v", chatIDStr, sendErr)
 			}
 			continue
 		}
 
-		// Build prompt with Telegram channel context so the model understands where it's running
-		from := upd.Message.From.FirstName
-		if upd.Message.From.Username != "" {
-			from = "@" + upd.Message.From.Username
+		from := msg.From.FirstName
+		if msg.From.Username != "" {
+			from = "@" + msg.From.Username
 		}
-		prompt := upd.Message.Text
+
+		// ── Build the prompt ─────────────────────────────────────────────────
+
+		var promptParts []string
+
+		// Voice message: transcribe with local Whisper
+		if hasVoice {
+			_ = s.sendChatAction(ctx, bot.BotToken, msg.Chat.ID, "typing")
+			audioData, _, dlErr := downloadTelegramFile(ctx, bot.BotToken, msg.Voice.FileID)
+			if dlErr != nil {
+				s.wlog("telegram-worker", "[telegram-worker] failed to download voice file: %v", dlErr)
+			} else {
+				mimeType := msg.Voice.MimeType
+				if mimeType == "" {
+					mimeType = "audio/ogg"
+				}
+				transcript, tErr := s.whisper.Transcribe(ctx, audioData, mimeType)
+				if tErr != nil {
+					s.wlog("telegram-worker", "[telegram-worker] whisper transcription failed: %v", tErr)
+					_ = s.sendTelegramMessage(ctx, bot.BotToken, msg.Chat.ID, "⚠️ Could not transcribe voice message.")
+					continue
+				}
+				s.wlog("telegram-worker", "[telegram-worker] voice transcription: %s", workerLogPreview(transcript, 120))
+				promptParts = append(promptParts, "[Voice message transcription]: "+transcript)
+			}
+		}
+
+		// Photo message: download and embed as data URL
+		if hasPhoto {
+			// Pick the largest photo (last in the array)
+			largest := msg.Photo[len(msg.Photo)-1]
+			imgData, filePath, dlErr := downloadTelegramFile(ctx, bot.BotToken, largest.FileID)
+			if dlErr != nil {
+				s.wlog("telegram-worker", "[telegram-worker] failed to download photo: %v", dlErr)
+			} else {
+				ext := strings.ToLower(filepath.Ext(filePath))
+				mimeType := "image/jpeg"
+				switch ext {
+				case ".png":
+					mimeType = "image/png"
+				case ".gif":
+					mimeType = "image/gif"
+				case ".webp":
+					mimeType = "image/webp"
+				}
+				dataURL := "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(imgData)
+				caption := msg.Caption
+				if caption == "" {
+					caption = "photo"
+				}
+				promptParts = append(promptParts, fmt.Sprintf("![%s](%s)", caption, dataURL))
+			}
+		}
+
+		// Text (or caption for photo-only messages)
+		textContent := msg.Text
+		if textContent == "" {
+			textContent = msg.Caption
+		}
+		if textContent != "" {
+			promptParts = append(promptParts, textContent)
+		}
+
+		prompt := strings.Join(promptParts, "\n\n")
 		if from != "" {
-			prompt = fmt.Sprintf("[Telegram from %s]: %s", from, prompt)
+			prompt = fmt.Sprintf("[Telegram from %s]:\n%s", from, prompt)
 		}
-		// Prepend a brief context hint so the model never denies having Telegram access
 		prompt = "[Context: You are responding to your owner via their configured Telegram bot. Reply naturally and directly -- do not say you lack Telegram integration; you ARE the bot.]\n\n" + prompt
 
-		s.wlog("telegram-worker", "[telegram-worker] user %s bot %s message from chat %s: %s", userID, bot.Label, chatIDStr, workerLogPreview(upd.Message.Text, 120))
+		s.wlog("telegram-worker", "[telegram-worker] user %s bot %s message from chat %s: %s", userID, bot.Label, chatIDStr, workerLogPreview(prompt, 120))
 
-		result, err := s.runOrchestratorForUser(ctx, "telegram-worker", userID, prompt)
-		reply := result.Output
+		// ── Typing indicator ─────────────────────────────────────────────────
+		typingDone := make(chan struct{})
+		go func() {
+			_ = s.sendChatAction(ctx, bot.BotToken, msg.Chat.ID, "typing")
+			ticker := time.NewTicker(4 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-typingDone:
+					return
+				case <-ticker.C:
+					_ = s.sendChatAction(ctx, bot.BotToken, msg.Chat.ID, "typing")
+				}
+			}
+		}()
+
+		orchResult, err := s.runOrchestratorForUser(ctx, "telegram-worker", userID, prompt)
+		close(typingDone)
+
+		reply := orchResult.Output
 		if err != nil {
 			reply = fmt.Sprintf("Error: %v", err)
 		}
@@ -976,7 +1088,7 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 			reply = "(no reply)"
 		}
 
-		if sendErr := s.sendTelegramMessage(ctx, bot.BotToken, upd.Message.Chat.ID, reply); sendErr != nil {
+		if sendErr := s.sendTelegramFormattedReply(ctx, bot.BotToken, msg.Chat.ID, reply); sendErr != nil {
 			s.wlog("telegram-worker", "[telegram-worker] failed to send reply to chat %s: %v", chatIDStr, sendErr)
 		}
 	}
@@ -985,10 +1097,29 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 }
 
 func (s *Server) sendTelegramMessage(ctx context.Context, botToken string, chatID int64, text string) error {
+	return s.sendTelegramRaw(ctx, botToken, chatID, text, "")
+}
+
+// sendTelegramFormattedReply converts the LLM's markdown reply to Telegram HTML
+// and sends it with parse_mode=HTML. On failure it retries as plain text.
+func (s *Server) sendTelegramFormattedReply(ctx context.Context, botToken string, chatID int64, markdownText string) error {
+	htmlText := markdownToTelegramHTML(markdownText)
+	err := s.sendTelegramRaw(ctx, botToken, chatID, htmlText, "HTML")
+	if err != nil {
+		// Fallback: strip formatting and send as plain text
+		return s.sendTelegramRaw(ctx, botToken, chatID, markdownText, "")
+	}
+	return nil
+}
+
+func (s *Server) sendTelegramRaw(ctx context.Context, botToken string, chatID int64, text, parseMode string) error {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
 	payload := map[string]any{
 		"chat_id": chatID,
 		"text":    text,
+	}
+	if parseMode != "" {
+		payload["parse_mode"] = parseMode
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -1007,6 +1138,75 @@ func (s *Server) sendTelegramMessage(ctx context.Context, botToken string, chatI
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("sendMessage HTTP %d", resp.StatusCode)
 	}
+	return nil
+}
+
+// downloadTelegramFile fetches a file from the Telegram Bot API by file_id.
+// Returns the file bytes and the file_path (which contains the extension).
+func downloadTelegramFile(ctx context.Context, botToken, fileID string) ([]byte, string, error) {
+	getFileURL := fmt.Sprintf("https://api.telegram.org/bot%s/getFile?file_id=%s", botToken, fileID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, getFileURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			FilePath string `json:"file_path"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, "", fmt.Errorf("getFile decode: %w", err)
+	}
+	if !result.OK || result.Result.FilePath == "" {
+		return nil, "", fmt.Errorf("telegram getFile failed")
+	}
+
+	dlURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", botToken, result.Result.FilePath)
+	req2, err := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp2.Body.Close()
+
+	data, err := io.ReadAll(resp2.Body)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, result.Result.FilePath, nil
+}
+
+// sendChatAction sends a chat action (e.g. "typing") to a Telegram chat.
+func (s *Server) sendChatAction(ctx context.Context, botToken string, chatID int64, action string) error {
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendChatAction", botToken)
+	payload := map[string]any{
+		"chat_id": chatID,
+		"action":  action,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
 	return nil
 }
 

@@ -27,7 +27,7 @@ func (b *Bot) Name() string { return "telegram:" + b.label }
 
 // SendNotification sends a Markdown-formatted message to the bot's notification chat.
 func (b *Bot) SendNotification(ctx context.Context, title, body string) error {
-	text := fmt.Sprintf("[notification] *%s*\n%s", title, body)
+	text := fmt.Sprintf("🔔 *%s*\n%s", title, body)
 	return b.Send(ctx, text)
 }
 

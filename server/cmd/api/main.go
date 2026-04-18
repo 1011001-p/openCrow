@@ -49,6 +49,8 @@ func main() {
 		AdminPasswordBcrypt: cfg.AdminPasswordBcrypt,
 		ServerShellTimeout:  cfg.ServerShellTimeout,
 		StateDir:            cfg.StateDir,
+		WhisperModel:        cfg.WhisperModel,
+		WhisperEndpoint:     cfg.WhisperEndpoint,
 	})
 
 	httpServer := &http.Server{

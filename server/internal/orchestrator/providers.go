@@ -34,12 +34,33 @@ type ToolSpec struct {
 
 // ── Provider interface ────────────────────────────────────────────────────────
 
+// TokenUsage holds token counts from a single LLM response.
+// Fields are zero-valued when not reported by the provider.
+type TokenUsage struct {
+	PromptTokens     int `json:"promptTokens"`
+	CompletionTokens int `json:"completionTokens"`
+	TotalTokens      int `json:"totalTokens"`
+}
+
+// Add merges another TokenUsage into this one (accumulates totals).
+func (u *TokenUsage) Add(other TokenUsage) {
+	u.PromptTokens += other.PromptTokens
+	u.CompletionTokens += other.CompletionTokens
+	u.TotalTokens += other.TotalTokens
+}
+
+// IsZero returns true when no token data was reported.
+func (u TokenUsage) IsZero() bool {
+	return u.PromptTokens == 0 && u.CompletionTokens == 0 && u.TotalTokens == 0
+}
+
 // Provider can complete a chat conversation, optionally using tools.
 type Provider interface {
 	Name() string
-	// Chat sends messages and optional tools. Returns (text, toolCalls, error).
+	// Chat sends messages and optional tools. Returns (text, toolCalls, usage, error).
 	// toolCalls is non-empty when the model wants to call a function.
-	Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, error)
+	// usage may be zero-valued when the provider does not report token counts.
+	Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, TokenUsage, error)
 }
 
 // ── OpenAI / OpenAI-compatible ────────────────────────────────────────────────
@@ -148,7 +169,7 @@ func buildOpenAIContent(role, content string) any {
 	return parts
 }
 
-func (p *OpenAIProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, error) {
+func (p *OpenAIProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, TokenUsage, error) {
 	// Build messages array
 	type oaiMsg struct {
 		Role       string          `json:"role"`
@@ -246,12 +267,12 @@ func (p *OpenAIProvider) Chat(ctx context.Context, system string, messages []Cha
 
 	b, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", nil, err
+		return "", nil, TokenUsage{}, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/v1/chat/completions", bytes.NewReader(b))
 	if err != nil {
-		return "", nil, err
+		return "", nil, TokenUsage{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if p.apiKey != "" {
@@ -260,15 +281,15 @@ func (p *OpenAIProvider) Chat(ctx context.Context, system string, messages []Cha
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return "", nil, fmt.Errorf("http request: %w", err)
+		return "", nil, TokenUsage{}, fmt.Errorf("http request: %w", err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", nil, fmt.Errorf("read response: %w", err)
+		return "", nil, TokenUsage{}, fmt.Errorf("read response: %w", err)
 	}
 	if resp.StatusCode >= 400 {
-		return "", nil, fmt.Errorf("http %d: %s", resp.StatusCode, truncate(string(raw), 400))
+		return "", nil, TokenUsage{}, fmt.Errorf("http %d: %s", resp.StatusCode, truncate(string(raw), 400))
 	}
 
 	var result struct {
@@ -285,18 +306,32 @@ func (p *OpenAIProvider) Chat(ctx context.Context, system string, messages []Cha
 				} `json:"tool_calls"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage *struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
 		Error *struct {
 			Message string `json:"message"`
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {
-		return "", nil, fmt.Errorf("openai: parse response: %w", err)
+		return "", nil, TokenUsage{}, fmt.Errorf("openai: parse response: %w", err)
 	}
 	if result.Error != nil {
-		return "", nil, fmt.Errorf("openai api error: %s", result.Error.Message)
+		return "", nil, TokenUsage{}, fmt.Errorf("openai api error: %s", result.Error.Message)
 	}
 	if len(result.Choices) == 0 {
-		return "", nil, fmt.Errorf("openai: empty response")
+		return "", nil, TokenUsage{}, fmt.Errorf("openai: empty response")
+	}
+
+	var usage TokenUsage
+	if result.Usage != nil {
+		usage = TokenUsage{
+			PromptTokens:     result.Usage.PromptTokens,
+			CompletionTokens: result.Usage.CompletionTokens,
+			TotalTokens:      result.Usage.TotalTokens,
+		}
 	}
 
 	choice := result.Choices[0].Message
@@ -305,7 +340,7 @@ func (p *OpenAIProvider) Chat(ctx context.Context, system string, messages []Cha
 		for _, tc := range choice.ToolCalls {
 			args, err := parseToolCallArguments(tc.Function.Arguments)
 			if err != nil {
-				return "", nil, fmt.Errorf("openai: parse tool call %s arguments for %s: %v (raw: %s)", tc.ID, tc.Function.Name, err, truncate(string(tc.Function.Arguments), 200))
+				return "", nil, TokenUsage{}, fmt.Errorf("openai: parse tool call %s arguments for %s: %v (raw: %s)", tc.ID, tc.Function.Name, err, truncate(string(tc.Function.Arguments), 200))
 			}
 			calls = append(calls, ToolCall{
 				ID:        tc.ID,
@@ -314,13 +349,13 @@ func (p *OpenAIProvider) Chat(ctx context.Context, system string, messages []Cha
 				Status:    "pending",
 			})
 		}
-		return "", calls, nil
+		return "", calls, usage, nil
 	}
 
 	if choice.Content == "" {
-		return "", nil, fmt.Errorf("openai: empty content")
+		return "", nil, TokenUsage{}, fmt.Errorf("openai: empty content")
 	}
-	return choice.Content, nil, nil
+	return choice.Content, nil, usage, nil
 }
 
 // ── Anthropic ────────────────────────────────────────────────────────────────
@@ -340,7 +375,7 @@ func NewAnthropicProvider(name, apiKey, model string) *AnthropicProvider {
 
 func (p *AnthropicProvider) Name() string { return p.name }
 
-func (p *AnthropicProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, error) {
+func (p *AnthropicProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, TokenUsage, error) {
 	type contentBlock struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
@@ -373,11 +408,11 @@ func (p *AnthropicProvider) Chat(ctx context.Context, system string, messages []
 
 	b, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", nil, err
+		return "", nil, TokenUsage{}, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.anthropic.com/v1/messages", bytes.NewReader(b))
 	if err != nil {
-		return "", nil, err
+		return "", nil, TokenUsage{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", p.apiKey)
@@ -385,15 +420,15 @@ func (p *AnthropicProvider) Chat(ctx context.Context, system string, messages []
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return "", nil, fmt.Errorf("http request: %w", err)
+		return "", nil, TokenUsage{}, fmt.Errorf("http request: %w", err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", nil, err
+		return "", nil, TokenUsage{}, err
 	}
 	if resp.StatusCode >= 400 {
-		return "", nil, fmt.Errorf("anthropic http %d: %s", resp.StatusCode, truncate(string(raw), 400))
+		return "", nil, TokenUsage{}, fmt.Errorf("anthropic http %d: %s", resp.StatusCode, truncate(string(raw), 400))
 	}
 
 	var result struct {
@@ -403,17 +438,17 @@ func (p *AnthropicProvider) Chat(ctx context.Context, system string, messages []
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {
-		return "", nil, fmt.Errorf("anthropic: parse response: %w", err)
+		return "", nil, TokenUsage{}, fmt.Errorf("anthropic: parse response: %w", err)
 	}
 	if result.Error != nil {
-		return "", nil, fmt.Errorf("anthropic api error: %s", result.Error.Message)
+		return "", nil, TokenUsage{}, fmt.Errorf("anthropic api error: %s", result.Error.Message)
 	}
 	for _, block := range result.Content {
 		if block.Type == "text" && block.Text != "" {
-			return block.Text, nil, nil
+			return block.Text, nil, TokenUsage{}, nil
 		}
 	}
-	return "", nil, fmt.Errorf("anthropic: empty response")
+	return "", nil, TokenUsage{}, fmt.Errorf("anthropic: empty response")
 }
 
 // ── Ollama ────────────────────────────────────────────────────────────────────
@@ -436,7 +471,7 @@ func NewOllamaProvider(name, baseURL, model string) *OllamaProvider {
 
 func (p *OllamaProvider) Name() string { return p.name }
 
-func (p *OllamaProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, error) {
+func (p *OllamaProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, TokenUsage, error) {
 	type oMsg struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
@@ -461,25 +496,25 @@ func (p *OllamaProvider) Chat(ctx context.Context, system string, messages []Cha
 
 	b, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", nil, err
+		return "", nil, TokenUsage{}, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/api/chat", bytes.NewReader(b))
 	if err != nil {
-		return "", nil, err
+		return "", nil, TokenUsage{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return "", nil, fmt.Errorf("ollama http request: %w", err)
+		return "", nil, TokenUsage{}, fmt.Errorf("ollama http request: %w", err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", nil, err
+		return "", nil, TokenUsage{}, err
 	}
 	if resp.StatusCode >= 400 {
-		return "", nil, fmt.Errorf("ollama http %d: %s", resp.StatusCode, truncate(string(raw), 400))
+		return "", nil, TokenUsage{}, fmt.Errorf("ollama http %d: %s", resp.StatusCode, truncate(string(raw), 400))
 	}
 
 	var result struct {
@@ -489,15 +524,15 @@ func (p *OllamaProvider) Chat(ctx context.Context, system string, messages []Cha
 		Error string `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {
-		return "", nil, fmt.Errorf("ollama: parse response: %w", err)
+		return "", nil, TokenUsage{}, fmt.Errorf("ollama: parse response: %w", err)
 	}
 	if result.Error != "" {
-		return "", nil, fmt.Errorf("ollama error: %s", result.Error)
+		return "", nil, TokenUsage{}, fmt.Errorf("ollama error: %s", result.Error)
 	}
 	if result.Message.Content == "" {
-		return "", nil, fmt.Errorf("ollama: empty response")
+		return "", nil, TokenUsage{}, fmt.Errorf("ollama: empty response")
 	}
-	return result.Message.Content, nil, nil
+	return result.Message.Content, nil, TokenUsage{}, nil
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────────

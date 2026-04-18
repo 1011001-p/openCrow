@@ -43,6 +43,17 @@ export function isAuthenticated(): boolean {
   return !!getAccessToken();
 }
 
+// Global callback invoked when all auth attempts fail (e.g. expired refresh token).
+// Set this from your root component to redirect to the login page.
+let _onAuthFailure: (() => void) | null = null;
+export function setAuthFailureHandler(fn: () => void) {
+  _onAuthFailure = fn;
+}
+function notifyAuthFailure() {
+  clearTokens();
+  if (_onAuthFailure) _onAuthFailure();
+}
+
 // Singleton refresh promise to prevent concurrent refresh races
 let _refreshPromise: Promise<boolean> | null = null;
 
@@ -106,10 +117,14 @@ export async function api<T = unknown>(
     if (refreshed) {
       headers["Authorization"] = `Bearer ${getAccessToken()}`;
       res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    } else {
+      notifyAuthFailure();
+      throw new ApiError(401, "Session expired");
     }
   }
 
   if (!res.ok) {
+    if (res.status === 401) notifyAuthFailure();
     const body = await res.text();
     throw new ApiError(res.status, body);
   }
@@ -228,6 +243,12 @@ export interface WorkerStat {
 export interface WorkerLogEntry {
   ts: string;   // ISO timestamp
   line: string;
+}
+
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
 }
 
 export interface TelegramBotConfig {
@@ -402,7 +423,7 @@ export interface ProviderModelsProbeResult {
 }
 
 export interface UserConfig {
-  integrations: { emailAccounts: EmailAccountConfig[]; telegramBots: TelegramBotConfig[]; sshServers: SSHServerConfig[] };
+  integrations: { emailAccounts: EmailAccountConfig[]; telegramBots: TelegramBotConfig[]; sshServers: SSHServerConfig[]; defaultNotificationBotId: string };
   tools: {
     definitions: ToolDefinition[];
     golangTools: GolangToolEntry[];
@@ -419,7 +440,7 @@ export interface UserConfig {
 }
 
 interface ServerUserConfig {
-  integrations?: { emailAccounts?: Array<EmailAccountConfig & { useTls?: boolean }>; telegramBots?: TelegramBotConfig[]; sshServers?: SSHServerConfig[] };
+  integrations?: { emailAccounts?: Array<EmailAccountConfig & { useTls?: boolean }>; telegramBots?: TelegramBotConfig[]; sshServers?: SSHServerConfig[]; defaultNotificationBotId?: string };
   tools?: {
     definitions?: ToolDefinition[];
     golangTools?: GolangToolEntry[];
@@ -467,6 +488,7 @@ function normalizeUserConfig(raw: ServerUserConfig): UserConfig {
       })),
       telegramBots: Array.isArray(raw?.integrations?.telegramBots) ? raw.integrations!.telegramBots : [],
       sshServers: Array.isArray(raw?.integrations?.sshServers) ? raw.integrations!.sshServers : [],
+      defaultNotificationBotId: raw?.integrations?.defaultNotificationBotId ?? "",
     },
     tools: {
       definitions: definitions.map((tool) => ({
@@ -529,6 +551,7 @@ function toServerUserConfig(config: UserConfig): ServerUserConfig {
       })),
       telegramBots: config.integrations.telegramBots ?? [],
       sshServers: config.integrations.sshServers ?? [],
+      defaultNotificationBotId: config.integrations.defaultNotificationBotId ?? "",
     },
     tools: {
       definitions: config.tools.definitions,
@@ -664,12 +687,13 @@ export const endpoints = {
     }),
 
   // Streaming completion: calls onToken for each delta, returns full output
-  streamComplete: async (
+   streamComplete: async (
     conversationId: string,
     message: string,
     onToken: (token: string) => void,
     providerOrder?: string[],
     onToolCall?: (name: string, args: string, kind?: "TOOL" | "MCP") => void,
+    onUsage?: (usage: TokenUsage) => void,
   ): Promise<string> => {
     const token = getAccessToken();
     const headers: Record<string, string> = {
@@ -713,6 +737,13 @@ export const endpoints = {
             onToken(data.token);
           } else if (eventType === "done") {
             fullOutput = data.output ?? fullOutput;
+            if (data.usage && onUsage) {
+              onUsage({
+                promptTokens: data.usage.prompt_tokens ?? 0,
+                completionTokens: data.usage.completion_tokens ?? 0,
+                totalTokens: data.usage.total_tokens ?? 0,
+              });
+            }
           } else if (eventType === "tool_call" && onToolCall) {
             const kind = data.kind === "MCP" ? "MCP" : data.kind === "TOOL" ? "TOOL" : undefined;
             onToolCall(data.name, data.arguments ?? "{}", kind);

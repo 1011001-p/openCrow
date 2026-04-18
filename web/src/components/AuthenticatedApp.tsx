@@ -101,7 +101,7 @@ function SidebarNavButton({
   );
 }
 
-export default function AuthenticatedApp() {
+export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }) {
   const [activeSection, setActiveSection] = useState<Section>("chat");
   const [requestedConfigTab, setRequestedConfigTab] = useState<string | undefined>(undefined);
   const [conversations, setConversations] = useState<ConversationDTO[]>([]);
@@ -127,7 +127,8 @@ export default function AuthenticatedApp() {
 
   function handleLogout() {
     clearTokens();
-    window.location.reload();
+    if (onLogout) onLogout();
+    else window.location.href = "/";
   }
 
   // Map section -> ConfigStudio tab key (for sections that render ConfigStudio)

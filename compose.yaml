@@ -83,6 +83,8 @@ services:
       STATE_DIR: /data
       CONFIG_FILE_PATH: /data/config.json
       TZ: ${TZ:-Europe/Berlin}
+      WHISPER_ENDPOINT: ${WHISPER_ENDPOINT:-http://whisper:8081}
+      WHISPER_MODEL: ${WHISPER_MODEL:-ggml-base}
     depends_on:
       postgres:
         condition: service_healthy
@@ -96,6 +98,18 @@ services:
       - "${API_PORT:-8080}:8080"
     volumes:
       - server_state:/data
+
+  whisper:
+    image: ghcr.io/mutablelogic/go-whisper:latest
+    container_name: opencrow-whisper
+    restart: unless-stopped
+    command: ["run", "--http.addr=0.0.0.0:8081"]
+    environment:
+      WHISPER_MODEL_PATH: /models
+    ports:
+      - "${WHISPER_PORT:-8081}:8081"
+    volumes:
+      - whisper_models:/models
 
   web:
     build:
@@ -119,3 +133,4 @@ services:
 volumes:
   postgres_data:
   server_state:
+  whisper_models:
