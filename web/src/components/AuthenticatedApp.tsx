@@ -6,55 +6,10 @@ import ChatShell from "@/components/ChatShell";
 import ConfigStudio from "@/components/ConfigStudio";
 import OverviewView from "@/components/OverviewView";
 import TerminalView from "@/components/TerminalView";
+import { ChatIcon, LogoutIcon, OverviewIcon, TerminalIcon, ToolIcon } from "@/components/ui/icons";
 import { clearTokens, endpoints, type ConversationDTO } from "@/lib/api";
 
 type Section = "chat" | "config" | "overview" | "terminal";
-
-function ChatIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
-      <path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H5l-3 3V3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function GearIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
-      <path d="M6.5 1.5h3l.5 2 1.5.87 2-.5 1.5 2.6-1.5 1.5v1.96l1.5 1.5-1.5 2.6-2-.5-1.5.87-.5 2h-3l-.5-2-1.5-.87-2 .5-1.5-2.6 1.5-1.5V7.97l-1.5-1.5 1.5-2.6 2 .5 1.5-.87.5-2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-      <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function LogoutIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
-      <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10.5 11.5L14 8l-3.5-3.5M14 8H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function OverviewIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
-      <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
-      <rect x="9" y="1.5" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
-      <rect x="1.5" y="9" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
-      <rect x="9" y="9" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
-  );
-}
-
-function TerminalIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
-      <rect x="1" y="2.5" width="14" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M4 6l2.5 2L4 10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M9 10h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function automationLabel(kind?: string) {
   switch (kind) {
@@ -317,7 +272,7 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
           />
           <SidebarNavButton
             section="config"
-            icon={<GearIcon />}
+            icon={<ToolIcon />}
             label="Config"
             activeSection={activeSection}
             setActiveSection={setActiveSection}
