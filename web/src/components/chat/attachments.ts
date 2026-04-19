@@ -92,7 +92,7 @@ function buildAttachmentContextBlock(
 function parseDataURL(
   dataUrl: string,
 ): { mime: string; isBase64: boolean; payload: string } | null {
-  const match = dataUrl.match(/^data:([^;,]+)?(?:;charset=[^;,]+)?(;base64)?,(.*)$/is);
+  const match = dataUrl.match(/^data:([^;,]+)?(?:;charset=[^;,]+)?(;base64)?,(.*)$/i);
   if (!match) return null;
   return {
     mime: (match[1] || "application/octet-stream").toLowerCase(),

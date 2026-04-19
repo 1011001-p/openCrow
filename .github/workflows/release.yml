@@ -8,9 +8,48 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  test-server:
+    name: Go tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Run tests
+        run: go test ./... -v -timeout 120s
+
+  build-web:
+    name: Web build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
   tag:
     name: Bump version & release
     runs-on: ubuntu-latest
+    needs: [test-server, build-web]
     permissions:
       contents: write
     outputs:
@@ -26,8 +65,8 @@ jobs:
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # feat: → minor, fix/chore/refactor/perf/ci/docs/test/style → patch
-          # BREAKING CHANGE or feat!/fix! → major
+          # feat: -> minor, fix/chore/refactor/perf/ci/docs/test/style -> patch
+          # BREAKING CHANGE or feat!/fix! -> major
           default_bump: patch
           release_branches: main
 

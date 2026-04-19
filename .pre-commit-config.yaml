@@ -9,6 +9,12 @@ repos:
         types_or: [ts, tsx, javascript, jsx, json, css]
         pass_filenames: true
         additional_dependencies: []
+      - id: go-tests
+        name: Go tests (server)
+        language: system
+        entry: bash -c 'cd server && PATH=$PATH:/usr/local/go/bin go test ./... -timeout 120s'
+        files: ^server/.*\.go$
+        pass_filenames: false
       - id: generate-swagger
         name: Generate Swagger (server)
         language: system
