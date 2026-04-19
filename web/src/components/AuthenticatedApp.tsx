@@ -133,7 +133,7 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
               alt="openCrow"
               width={50}
               height={50}
-              className="opacity-90 mx-4"
+              className="opacity-90 mx-4 crow-icon"
             />
           </h1>
           <p className="mt-1 font-mono text-xs text-on-surface-variant">v0.1.0 . Active</p>

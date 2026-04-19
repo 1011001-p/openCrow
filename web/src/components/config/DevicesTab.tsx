@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import QRCode from "react-qr-code";
 import type { UserConfig, CompanionAppConfig, DeviceTaskDTO, DeviceRegistration } from "@/lib/api";
-import { endpoints } from "@/lib/api";
+import { endpoints, getApiBase } from "@/lib/api";
 import { Input } from "@/components/ui/Input";
 import { Toggle } from "@/components/ui/Toggle";
 import { Button } from "@/components/ui/Button";
@@ -41,11 +41,13 @@ function CompanionAppCard({
   app,
   index: i,
   registration,
+  serverUrl,
   updateConfig,
 }: {
   app: CompanionAppConfig;
   index: number;
   registration?: DeviceRegistration;
+  serverUrl: string;
   updateConfig: UpdateConfigFn;
 }) {
   const [generating, setGenerating] = useState(false);
@@ -61,7 +63,7 @@ function CompanionAppCard({
       const res = await endpoints.createDeviceTokens(app.label || app.name);
       const payload = JSON.stringify({
         id: app.id,
-        server: window.location.origin,
+        server: serverUrl,
         accessToken: res.tokens.accessToken,
         refreshToken: res.tokens.refreshToken,
       });
@@ -151,6 +153,7 @@ export function DevicesTab({
   const [newTaskInstruction, setNewTaskInstruction] = useState("");
   const [addingTask, setAddingTask] = useState(false);
   const [registrations, setRegistrations] = useState<Record<string, DeviceRegistration>>({});
+  const [serverUrl, setServerUrl] = useState(() => getApiBase());
 
   const [isAddingDevice, setIsAddingDevice] = useState(false);
   const [newDeviceName, setNewDeviceName] = useState("");
@@ -228,7 +231,7 @@ export function DevicesTab({
       const deviceId = "dev_" + Math.random().toString(36).substring(2, 9);
       const payload = JSON.stringify({
         id: deviceId,
-        server: window.location.origin,
+        server: serverUrl,
         accessToken: res.tokens.accessToken,
         refreshToken: res.tokens.refreshToken,
       });
@@ -263,8 +266,23 @@ export function DevicesTab({
             </Button>
           }
         />
+
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-surface-mid border border-white/5">
+          <div className="flex-1">
+            <Input
+              label="Server URL for pairing"
+              value={serverUrl}
+              onChange={(e) => setServerUrl(e.target.value)}
+              placeholder="http://192.168.1.x:8080"
+            />
+          </div>
+          <p className="text-xs text-on-surface-variant mt-4 max-w-xs">
+            The URL your phone will use to reach this server. Use your LAN IP, not localhost.
+          </p>
+        </div>
+
         {companionApps.map((app, i) => (
-          <CompanionAppCard key={app.id || i} app={app} index={i} registration={app.id ? registrations[app.id] : undefined} updateConfig={updateConfig} />
+          <CompanionAppCard key={app.id || i} app={app} index={i} registration={app.id ? registrations[app.id] : undefined} serverUrl={serverUrl} updateConfig={updateConfig} />
         ))}
         {!companionApps.length && (
           <p className="text-on-surface-variant text-sm">No companion apps configured.</p>

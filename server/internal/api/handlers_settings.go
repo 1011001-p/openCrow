@@ -90,11 +90,9 @@ func (s *Server) handlePutUserConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sync email accounts to DB so the email worker and LLM tools can see them
-	if len(saved.Integrations.EmailAccounts) > 0 {
-		if syncErr := s.syncEmailInboxesFromConfig(r.Context(), userID, saved.Integrations.EmailAccounts); syncErr != nil {
-			log.Printf("[config] failed to sync email inboxes for user %s: %v", userID, syncErr)
-		}
+	// Sync email accounts to DB (reconcile: upserts present accounts, deletes removed ones)
+	if syncErr := s.syncEmailInboxesFromConfig(r.Context(), userID, saved.Integrations.EmailAccounts); syncErr != nil {
+		log.Printf("[config] failed to sync email inboxes for user %s: %v", userID, syncErr)
 	}
 
 	if _, hbErr := s.putHeartbeatConfig(r.Context(), userID, UpdateHeartbeatConfigRequest{

@@ -193,11 +193,6 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 			continue
 		}
 
-		from := msg.From.FirstName
-		if msg.From.Username != "" {
-			from = "@" + msg.From.Username
-		}
-
 		// ── Build the prompt ─────────────────────────────────────────────────
 
 		var promptParts []string
@@ -262,10 +257,6 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 
 		rawPrompt := strings.Join(promptParts, "\n\n")
 		prompt := rawPrompt
-		if from != "" {
-			prompt = fmt.Sprintf("[Telegram from %s]:\n%s", from, prompt)
-		}
-		prompt = "[Context: You are responding to your owner via their configured Telegram bot. Reply naturally and directly -- do not say you lack Telegram integration; you ARE the bot.]\n\n" + prompt
 
 		s.wlog("telegram-worker", "[telegram-worker] user %s bot %s message from chat %s: %s", userID, bot.Label, chatIDStr, workerLogPreview(prompt, 120))
 
@@ -313,6 +304,17 @@ func (s *Server) pollTelegramBot(ctx context.Context, userID string, bot configs
 			}
 			if _, dbErr := s.createMessage(ctx, userID, convID, "assistant", reply); dbErr != nil {
 				s.wlog("telegram-worker", "[telegram-worker] failed to persist assistant message: %v", dbErr)
+			}
+			for _, tc := range orchResult.Trace.ToolCalls {
+				outputStr := tc.Output
+				errStr := ""
+				if tc.Status == "error" {
+					errStr = tc.Output
+					outputStr = ""
+				}
+				if saveErr := s.saveToolCall(ctx, userID, convID, tc.Name, tc.Arguments, outputStr, errStr, 0); saveErr != nil {
+					s.wlog("telegram-worker", "[telegram-worker] failed to persist tool call %s: %v", tc.Name, saveErr)
+				}
 			}
 		}
 	}

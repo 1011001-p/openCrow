@@ -162,13 +162,13 @@ export default function ChatShell({
         <div className="absolute bottom-6 left-0 flex justify-center px-6 pointer-events-none" style={{ right: "0" }}>
           <div className="w-full max-w-3xl pointer-events-auto">
             {readOnly ? (
-              <div className="rounded-xl border border-violet bg-surface-lowest/80 backdrop-blur-2xl shadow-[var(--shadow-float)] p-3 text-center">
+              <div className="chat-composer rounded-xl border border-violet bg-surface-lowest/80 backdrop-blur-2xl shadow-[var(--shadow-float)] p-3 text-center">
                 <p className="text-xs text-on-surface-variant font-mono">
                   Read-only — replies arrive via Telegram
                 </p>
               </div>
             ) : (
-              <div className="rounded-xl border border-violet bg-surface-lowest/80 backdrop-blur-2xl shadow-[var(--shadow-float)] ring-1 ring-violet/20 focus-within:ring-violet/40 transition-all p-3">
+              <div className="chat-composer rounded-xl border border-violet bg-surface-lowest/80 backdrop-blur-2xl shadow-[var(--shadow-float)] ring-1 ring-violet/20 focus-within:ring-violet/40 transition-all p-3">
                 {/* Provider/model selector row */}
                 {providers.length > 0 && (
                   <div className="mb-2 flex items-center gap-2">

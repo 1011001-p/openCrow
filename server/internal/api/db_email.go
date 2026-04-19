@@ -71,10 +71,10 @@ LIMIT 1;
 	return &c, nil
 }
 
-// syncEmailInboxesFromConfig upserts email accounts from the configstore into the email_inboxes DB table.
-// This ensures accounts saved via the Config UI are visible to the email worker and LLM tools.
+// syncEmailInboxesFromConfig reconciles the email_inboxes DB table with the given config slice:
+// upserts every account in the list and deletes rows whose address is no longer present.
 func (s *Server) syncEmailInboxesFromConfig(ctx context.Context, userID string, accounts []configstore.EmailAccountConfig) error {
-	const q = `
+	const upsertQ = `
 INSERT INTO email_inboxes (user_id, address, label, imap_host, imap_port, imap_username, imap_password, smtp_host, smtp_port, use_tls, active, poll_interval_seconds, updated_at)
 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
 ON CONFLICT (user_id, address) DO UPDATE SET
@@ -90,6 +90,7 @@ ON CONFLICT (user_id, address) DO UPDATE SET
     poll_interval_seconds = EXCLUDED.poll_interval_seconds,
     updated_at    = NOW();
 `
+	kept := make([]string, 0, len(accounts))
 	for _, acc := range accounts {
 		imapPort := acc.ImapPort
 		if imapPort <= 0 {
@@ -101,15 +102,24 @@ ON CONFLICT (user_id, address) DO UPDATE SET
 		}
 		pollInterval := acc.PollIntervalSeconds
 		if pollInterval <= 0 {
-			pollInterval = 900 // 15 minutes default
+			pollInterval = 900
 		}
-		if _, err := s.db.Exec(ctx, q,
+		if _, err := s.db.Exec(ctx, upsertQ,
 			userID, acc.Address, acc.Label, acc.ImapHost, imapPort,
 			acc.ImapUsername, acc.ImapPassword,
 			acc.SmtpHost, smtpPort, acc.UseTLS, acc.Enabled, pollInterval,
 		); err != nil {
 			return fmt.Errorf("upsert inbox %s: %w", acc.Address, err)
 		}
+		kept = append(kept, strings.ToLower(strings.TrimSpace(acc.Address)))
+	}
+
+	// Delete rows that are no longer in the config list.
+	if _, err := s.db.Exec(ctx,
+		`DELETE FROM email_inboxes WHERE user_id = $1::uuid AND NOT (LOWER(TRIM(address)) = ANY($2::text[]))`,
+		userID, kept,
+	); err != nil {
+		return fmt.Errorf("delete orphaned inboxes: %w", err)
 	}
 	return nil
 }

@@ -78,10 +78,21 @@ import type {
   DeviceRegistration,
 } from "./api-types";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "http://localhost:8080";
+// Read the API base URL injected by the server-side layout at runtime.
+// Falls back to baked-in env vars only when the meta tag is unavailable (e.g. SSR).
+export function getApiBase(): string {
+  if (typeof document !== "undefined") {
+    const content = document.head
+      .querySelector('meta[name="x-api-base"]')
+      ?.getAttribute("content");
+    if (content) return content;
+  }
+  return (
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "http://localhost:8080"
+  );
+}
 
 function getCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -144,7 +155,7 @@ async function _doRefresh(): Promise<boolean> {
   const refresh = getRefreshToken();
   if (!refresh) return false;
   try {
-    const res = await fetch(`${API_BASE}/v1/auth/refresh`, {
+    const res = await fetch(`${getApiBase()}/v1/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken: refresh }),
@@ -188,14 +199,14 @@ export async function api<T = unknown>(
   const token = getAccessToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  let res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let res = await fetch(`${getApiBase()}${path}`, { ...options, headers });
 
   // Auto-refresh on 401
   if (res.status === 401 && token) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
       headers["Authorization"] = `Bearer ${getAccessToken()}`;
-      res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      res = await fetch(`${getApiBase()}${path}`, { ...options, headers });
     } else {
       notifyAuthFailure();
       throw new ApiError(401, "Session expired");
@@ -465,7 +476,7 @@ export const endpoints = {
     if (clientTimezone) headers["X-Client-Timezone"] = clientTimezone;
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    const res = await fetch(`${API_BASE}/v1/orchestrator/stream`, {
+    const res = await fetch(`${getApiBase()}/v1/orchestrator/stream`, {
       method: "POST",
       headers,
       body: JSON.stringify({ conversationId, message, providerOrder }),
@@ -547,7 +558,7 @@ export const endpoints = {
     if (clientTimezone) headers["X-Client-Timezone"] = clientTimezone;
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    const res = await fetch(`${API_BASE}/v1/conversations/${convId}/messages/${msgId}/regenerate`, {
+    const res = await fetch(`${getApiBase()}/v1/conversations/${convId}/messages/${msgId}/regenerate`, {
       method: "POST",
       headers,
     });

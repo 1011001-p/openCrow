@@ -50,7 +50,7 @@ func isBuiltinToolName(name string) bool {
 		"configure_heartbeat", "trigger_heartbeat", "queue_device_action",
 		"list_devices", "create_device", "delete_device", "edit_device",
 		"list_device_tasks", "get_device_capabilities",
-		"setup_email", "check_email", "read_email", "reply_email", "compose_email", "search_email",
+		"setup_email", "remove_email", "check_email", "read_email", "reply_email", "compose_email", "search_email",
 		"send_notification", "setup_telegram_bot",
 		"execute_shell_command", "manage_process",
 		"ssh_execute",
@@ -141,6 +141,9 @@ func (s *Server) executeTool(ctx context.Context, userID, name string, args map[
 	// ── Email ────────────────────────────────────────────────────────
 	case "setup_email":
 		return s.toolSetupEmail(ctx, userID, args)
+
+	case "remove_email":
+		return s.toolRemoveEmail(ctx, userID, args)
 
 	case "check_email":
 		return s.toolCheckEmail(ctx, userID, args)

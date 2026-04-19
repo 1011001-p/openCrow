@@ -169,15 +169,21 @@ export function EmailTab({
         title="Email Accounts"
         description="Manage connected email accounts for IMAP polling"
         action={
-          <Button variant="secondary" size="sm" onClick={() => updateConfig((c) => {
-            c.integrations.emailAccounts.push({
-              label: "", address: "", imapHost: "", imapPort: 993,
-              imapUsername: "", imapPassword: "",
-              smtpHost: "", smtpPort: 587, tls: true, enabled: true,
-              pollIntervalSeconds: 900,
-            });
-            return c;
-          })}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={config.integrations.emailAccounts.some((a) => !a.address?.trim())}
+            title={config.integrations.emailAccounts.some((a) => !a.address?.trim()) ? "Fill in the address of the existing account first" : undefined}
+            onClick={() => updateConfig((c) => {
+              c.integrations.emailAccounts.push({
+                label: "", address: "", imapHost: "", imapPort: 993,
+                imapUsername: "", imapPassword: "",
+                smtpHost: "", smtpPort: 587, tls: true, enabled: true,
+                pollIntervalSeconds: 900,
+              });
+              return c;
+            })}
+          >
             Add Account
           </Button>
         }

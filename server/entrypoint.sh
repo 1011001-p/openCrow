@@ -28,4 +28,11 @@ done
 mkdir -p /data/skills "$SANDBOX_DIR/data/skills"
 mountpoint -q "$SANDBOX_DIR/data/skills" || mount --bind /data/skills "$SANDBOX_DIR/data/skills"
 
+# Run database migrations when the migrate binary is available (production image)
+if command -v migrate > /dev/null 2>&1 && [ -n "${DATABASE_URL}" ]; then
+  echo "==> Running database migrations..."
+  migrate -path /migrations -database "${DATABASE_URL}" up
+  echo "==> Migrations complete."
+fi
+
 exec "$@"

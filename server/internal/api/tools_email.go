@@ -131,6 +131,46 @@ func (s *Server) toolSetupEmail(ctx context.Context, userID string, args map[str
 	}, nil
 }
 
+func (s *Server) toolRemoveEmail(ctx context.Context, userID string, args map[string]any) (map[string]any, error) {
+	address, _ := args["address"].(string)
+	address = strings.TrimSpace(strings.ToLower(address))
+	if address == "" {
+		return map[string]any{"success": false, "error": "address is required"}, nil
+	}
+
+	if s.configStore != nil {
+		cfg, err := s.configStore.GetUserConfig(userID)
+		if err != nil {
+			return map[string]any{"success": false, "error": "failed to load config"}, nil
+		}
+
+		var kept []configstore.EmailAccountConfig
+		found := false
+		for _, acc := range cfg.Integrations.EmailAccounts {
+			if strings.EqualFold(strings.TrimSpace(acc.Address), address) {
+				found = true
+				continue
+			}
+			kept = append(kept, acc)
+		}
+		if !found {
+			return map[string]any{"success": false, "error": "email account not found"}, nil
+		}
+		cfg.Integrations.EmailAccounts = kept
+		if _, err := s.configStore.PutUserConfig(userID, cfg); err != nil {
+			return map[string]any{"success": false, "error": "failed to save config"}, nil
+		}
+		if err := s.syncEmailInboxesFromConfig(ctx, userID, cfg.Integrations.EmailAccounts); err != nil {
+			return map[string]any{"success": false, "error": fmt.Sprintf("failed to sync inboxes: %v", err)}, nil
+		}
+	}
+
+	return map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("Email account %s removed", address),
+	}, nil
+}
+
 type emailServerInfo struct {
 	imapHost string
 	imapPort int
