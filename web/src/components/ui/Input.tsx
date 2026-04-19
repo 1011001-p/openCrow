@@ -24,7 +24,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {error && <span className="text-error text-xs">{error}</span>}
       </div>
     );
-  }
+  },
 );
 
 Input.displayName = "Input";

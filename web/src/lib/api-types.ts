@@ -83,14 +83,14 @@ export interface RunCommandResponse {
 
 export interface WorkerStat {
   name: string;
-  lastTick: string;     // ISO timestamp or empty
+  lastTick: string; // ISO timestamp or empty
   lastError: string;
-  lastSuccess: string;  // ISO timestamp or empty
+  lastSuccess: string; // ISO timestamp or empty
   ticks: number;
 }
 
 export interface WorkerLogEntry {
-  ts: string;   // ISO timestamp
+  ts: string; // ISO timestamp
   line: string;
 }
 
@@ -311,7 +311,13 @@ export interface ProviderModelsProbeResult {
 }
 
 export interface UserConfig {
-  integrations: { emailAccounts: EmailAccountConfig[]; telegramBots: TelegramBotConfig[]; sshServers: SSHServerConfig[]; companionApps: CompanionAppConfig[]; defaultNotificationBotId: string };
+  integrations: {
+    emailAccounts: EmailAccountConfig[];
+    telegramBots: TelegramBotConfig[];
+    sshServers: SSHServerConfig[];
+    companionApps: CompanionAppConfig[];
+    defaultNotificationBotId: string;
+  };
   tools: {
     definitions: ToolDefinition[];
     golangTools: GolangToolEntry[];
@@ -330,7 +336,13 @@ export interface UserConfig {
 // ─── Internal server shape (for normalization) ───
 
 export interface ServerUserConfig {
-  integrations?: { emailAccounts?: Array<EmailAccountConfig & { useTls?: boolean }>; telegramBots?: TelegramBotConfig[]; sshServers?: SSHServerConfig[]; companionApps?: CompanionAppConfig[]; defaultNotificationBotId?: string };
+  integrations?: {
+    emailAccounts?: Array<EmailAccountConfig & { useTls?: boolean }>;
+    telegramBots?: TelegramBotConfig[];
+    sshServers?: SSHServerConfig[];
+    companionApps?: CompanionAppConfig[];
+    defaultNotificationBotId?: string;
+  };
   tools?: {
     definitions?: ToolDefinition[];
     golangTools?: GolangToolEntry[];
@@ -343,7 +355,9 @@ export interface ServerUserConfig {
   skills?: { entries?: SkillEntry[] };
   prompts?: { systemPrompt?: string; heartbeatPrompt?: string };
   memory?: { entries?: MemoryEntry[] };
-  schedules?: { entries?: Array<Omit<ScheduleEntry, "cronExpression"> & { cronExpression?: string | null }> };
+  schedules?: {
+    entries?: Array<Omit<ScheduleEntry, "cronExpression"> & { cronExpression?: string | null }>;
+  };
   heartbeat?: {
     enabled?: boolean;
     intervalSeconds?: number;

@@ -141,5 +141,10 @@ export const emptyMCPServer: MCPServerConfig = {
 
 export function isOpenAICompatibleProviderKind(kind: string): boolean {
   const normalized = kind.trim().toLowerCase();
-  return normalized === "openai" || normalized === "custom" || normalized === "openrouter" || normalized === "litellm";
+  return (
+    normalized === "openai" ||
+    normalized === "custom" ||
+    normalized === "openrouter" ||
+    normalized === "litellm"
+  );
 }

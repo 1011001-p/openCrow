@@ -99,14 +99,15 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
     terminal: "Sandboxed terminal",
   };
 
-  const visibleConversations = (showSystemChats
-    ? conversations
-    : conversations.filter((chat) => !chat.isAutomatic || chat.automationKind === "heartbeat"))
-    .sort((a, b) => {
-      if (a.channel && !b.channel) return -1;
-      if (!a.channel && b.channel) return 1;
-      return 0;
-    });
+  const visibleConversations = (
+    showSystemChats
+      ? conversations
+      : conversations.filter((chat) => !chat.isAutomatic || chat.automationKind === "heartbeat")
+  ).sort((a, b) => {
+    if (a.channel && !b.channel) return -1;
+    if (!a.channel && b.channel) return 1;
+    return 0;
+  });
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
   const isReadOnly = !!activeConversation?.channel;
@@ -216,7 +217,16 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
                         >
                           <div className="flex items-center gap-2">
                             {isChannel && (
-                              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-cyan">
+                              <svg
+                                width="10"
+                                height="10"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                className="shrink-0 text-cyan"
+                              >
                                 <path d="M2 5h12v8a1 1 0 01-1 1H3a1 1 0 01-1-1V5zM5 5V3a1 1 0 011-1h4a1 1 0 011 1v2" />
                               </svg>
                             )}
@@ -228,7 +238,9 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
                           </div>
                           <div className="mt-1 flex items-center gap-2">
                             {isChannel && (
-                              <span className={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider ${isActive ? "bg-cyan/12 text-cyan" : "bg-cyan/10 text-cyan/70"}`}>
+                              <span
+                                className={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider ${isActive ? "bg-cyan/12 text-cyan" : "bg-cyan/10 text-cyan/70"}`}
+                              >
                                 pinned · read-only
                               </span>
                             )}

@@ -25,7 +25,11 @@ export function HeartbeatDot({ label, online = true }: HeartbeatDotProps) {
           }
         `}</style>
       </div>
-      {label && <span className={`text-sm ${online ? "text-on-surface-variant" : "text-error"}`}>{label}</span>}
+      {label && (
+        <span className={`text-sm ${online ? "text-on-surface-variant" : "text-error"}`}>
+          {label}
+        </span>
+      )}
     </div>
   );
 }

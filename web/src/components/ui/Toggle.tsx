@@ -9,7 +9,9 @@ interface ToggleProps {
 
 export function Toggle({ checked, onChange, label, disabled = false }: ToggleProps) {
   return (
-    <label className={`inline-flex items-center gap-2 ${disabled ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}>
+    <label
+      className={`inline-flex items-center gap-2 ${disabled ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}
+    >
       {label && <span className="text-sm text-on-surface">{label}</span>}
       <button
         type="button"

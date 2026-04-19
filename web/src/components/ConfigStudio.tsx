@@ -2,27 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import React from "react";
-import cronstrue from "cronstrue";
 import type { ReactElement } from "react";
 import {
   endpoints,
   type UserConfig,
-  type EmailAccountConfig,
-  type ToolDefinition,
-  type ToolParameter,
-  type GolangToolEntry,
-  type ProviderConfig,
-  type SkillEntry,
   type SkillFile,
   type MemoryEntry,
   type TaskDTO,
-  type ScheduleEntry,
-  type MCPServerConfig,
-  type MCPToolSummary,
-  type MCPServerTestResult,
-  type ProviderModelsProbeResult,
-  type TelegramBotConfig,
-  type SSHServerConfig,
 } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -30,26 +16,18 @@ import { TextArea } from "@/components/ui/TextArea";
 import { Toggle } from "@/components/ui/Toggle";
 import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
-import { AnimatedDot } from "@/components/ui/AnimatedDot";
 import { Badge } from "@/components/ui/Badge";
-import { Chip } from "@/components/ui/Chip";
 import { Spinner } from "@/components/ui/Spinner";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { IconButton } from "@/components/ui/IconButton";
 
 // ─── Extracted config sub-components ───
 import {
   TABS,
-  PROVIDER_KINDS,
-  emptyEmailAccount,
   emptyGolangTool,
   emptyProvider,
   emptySkill,
   emptyMemory,
-  emptySchedule,
   emptyMCPServer,
-  isOpenAICompatibleProviderKind,
-  type UpdateConfigFn,
   type ProviderProbeStatus,
 } from "@/components/config";
 import { SaveBar } from "@/components/config/SaveBar";
@@ -92,26 +70,38 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
         setConfig(cfg);
 
         // Background probe all enabled providers
-        endpoints.getProvidersStatus().then((res) => {
-          const map: Record<string, ProviderProbeStatus> = {};
-          for (const p of res.providers) {
-            map[p.name] = { ok: p.ok, latencyMs: p.latencyMs, error: p.error };
-          }
-          setProviderStatuses(map);
-        }).catch(() => {});
+        endpoints
+          .getProvidersStatus()
+          .then((res) => {
+            const map: Record<string, ProviderProbeStatus> = {};
+            for (const p of res.providers) {
+              map[p.name] = { ok: p.ok, latencyMs: p.latencyMs, error: p.error };
+            }
+            setProviderStatuses(map);
+          })
+          .catch(() => {});
 
         // Load memories from DB
-        endpoints.listMemories().then((res) => {
-          setMemories(res.memories ?? []);
-        }).catch(() => {});
+        endpoints
+          .listMemories()
+          .then((res) => {
+            setMemories(res.memories ?? []);
+          })
+          .catch(() => {});
 
         // Load tasks from DB
-        endpoints.listTasks().then((res) => {
-          setTasks(res.tasks ?? []);
-        }).catch(() => {});
+        endpoints
+          .listTasks()
+          .then((res) => {
+            setTasks(res.tasks ?? []);
+          })
+          .catch(() => {});
 
         // Load skill files
-        endpoints.listSkillFiles().then(setSkillFiles).catch(() => {});
+        endpoints
+          .listSkillFiles()
+          .then(setSkillFiles)
+          .catch(() => {});
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load config");
       }
@@ -120,12 +110,9 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
 
   // ─── Immutable config updater ───
 
-  const updateConfig = useCallback(
-    (updater: (draft: UserConfig) => UserConfig) => {
-      setConfig((prev) => (prev ? updater(structuredClone(prev)) : prev));
-    },
-    []
-  );
+  const updateConfig = useCallback((updater: (draft: UserConfig) => UserConfig) => {
+    setConfig((prev) => (prev ? updater(structuredClone(prev)) : prev));
+  }, []);
 
   // ─── Save helpers ───
 
@@ -209,7 +196,6 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
 
   const renderTools = () => (
     <div className="space-y-6">
-
       {/* Built-in Tool Definitions (read-only) */}
       <SectionHeader title="Built-in Tools" description="Server-provided tools (read-only)" />
       {config.tools.definitions.length === 0 ? (
@@ -226,14 +212,22 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
                 <Toggle
                   label="Enabled"
                   checked={config.tools.enabledTools[tool.name] ?? false}
-                  onChange={(v) => updateConfig((c) => { c.tools.enabledTools[c.tools.definitions[i].name] = v; return c; })}
+                  onChange={(v) =>
+                    updateConfig((c) => {
+                      c.tools.enabledTools[c.tools.definitions[i].name] = v;
+                      return c;
+                    })
+                  }
                 />
               </div>
               <p className="text-xs text-on-surface-variant mb-2">{tool.description}</p>
               {tool.parameters.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {tool.parameters.map((param, pi) => (
-                    <span key={pi} className="inline-flex items-center gap-1 rounded bg-surface-mid px-2 py-0.5 text-xs font-mono text-on-surface-variant">
+                    <span
+                      key={pi}
+                      className="inline-flex items-center gap-1 rounded bg-surface-mid px-2 py-0.5 text-xs font-mono text-on-surface-variant"
+                    >
                       {param.name}
                       <span className="text-on-surface-variant/60">:{param.type}</span>
                       {param.required && <span className="text-error">*</span>}
@@ -251,7 +245,16 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
         title="Golang Tools"
         description="Custom server-side Go tool implementations"
         action={
-          <Button variant="secondary" size="sm" onClick={() => updateConfig((c) => { c.tools.golangTools.push({ ...emptyGolangTool }); return c; })}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              updateConfig((c) => {
+                c.tools.golangTools.push({ ...emptyGolangTool });
+                return c;
+              })
+            }
+          >
             Add Golang Tool
           </Button>
         }
@@ -260,19 +263,61 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
         <Card key={i} title={gt.name || `Golang Tool ${i + 1}`}>
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Input label="Name" value={gt.name} onChange={(e) => updateConfig((c) => { c.tools.golangTools[i].name = e.target.value; return c; })} />
-              <Input label="Description" value={gt.description} onChange={(e) => updateConfig((c) => { c.tools.golangTools[i].description = e.target.value; return c; })} />
+              <Input
+                label="Name"
+                value={gt.name}
+                onChange={(e) =>
+                  updateConfig((c) => {
+                    c.tools.golangTools[i].name = e.target.value;
+                    return c;
+                  })
+                }
+              />
+              <Input
+                label="Description"
+                value={gt.description}
+                onChange={(e) =>
+                  updateConfig((c) => {
+                    c.tools.golangTools[i].description = e.target.value;
+                    return c;
+                  })
+                }
+              />
             </div>
             <TextArea
               label="Source Code"
               value={gt.sourceCode}
-              onChange={(e) => updateConfig((c) => { c.tools.golangTools[i].sourceCode = e.target.value; return c; })}
+              onChange={(e) =>
+                updateConfig((c) => {
+                  c.tools.golangTools[i].sourceCode = e.target.value;
+                  return c;
+                })
+              }
               rows={12}
               className="font-mono text-xs"
             />
             <div className="flex items-center gap-4">
-              <Toggle label="Enabled" checked={gt.enabled} onChange={(v) => updateConfig((c) => { c.tools.golangTools[i].enabled = v; return c; })} />
-              <Button variant="ghost" size="sm" className="ml-auto hover:text-error" onClick={() => updateConfig((c) => { c.tools.golangTools.splice(i, 1); return c; })}>
+              <Toggle
+                label="Enabled"
+                checked={gt.enabled}
+                onChange={(v) =>
+                  updateConfig((c) => {
+                    c.tools.golangTools[i].enabled = v;
+                    return c;
+                  })
+                }
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto hover:text-error"
+                onClick={() =>
+                  updateConfig((c) => {
+                    c.tools.golangTools.splice(i, 1);
+                    return c;
+                  })
+                }
+              >
                 Remove
               </Button>
             </div>
@@ -280,7 +325,9 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
         </Card>
       ))}
       {config.tools.golangTools.length === 0 && (
-        <p className="text-on-surface-variant text-sm">No Golang tools. Click &quot;Add Golang Tool&quot; to create one with example code.</p>
+        <p className="text-on-surface-variant text-sm">
+          No Golang tools. Click &quot;Add Golang Tool&quot; to create one with example code.
+        </p>
       )}
 
       <SaveBar onClick={saveTools} loading={saving} label="Save Tools" status={saveStatus} />
@@ -295,7 +342,11 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
           title="Installed Skills"
           description="SKILL.md files installed from GitHub or created manually"
           action={
-            <Button variant="secondary" size="sm" onClick={() => setEditingSkill({ slug: "", name: "", description: "", content: "" })}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setEditingSkill({ slug: "", name: "", description: "", content: "" })}
+            >
               New Skill
             </Button>
           }
@@ -342,14 +393,34 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
         {skillFiles.map((sf) => (
           <Card key={sf.slug} title={sf.name || sf.slug}>
             <div className="space-y-2">
-              <p className="text-sm text-on-surface-variant">{sf.description || "No description"}</p>
+              <p className="text-sm text-on-surface-variant">
+                {sf.description || "No description"}
+              </p>
               <p className="text-xs text-on-surface-variant opacity-60 font-mono">{sf.path}</p>
               <div className="flex gap-2 mt-2">
-                <Button variant="secondary" size="sm" onClick={() => endpoints.getSkillFile(sf.slug).then(setEditingSkill).catch(() => {})}>Edit</Button>
-                <Button variant="ghost" size="sm" className="hover:text-error ml-auto" onClick={async () => {
-                  await endpoints.deleteSkillFile(sf.slug);
-                  setSkillFiles((prev) => prev.filter((s) => s.slug !== sf.slug));
-                }}>Delete</Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    endpoints
+                      .getSkillFile(sf.slug)
+                      .then(setEditingSkill)
+                      .catch(() => {})
+                  }
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="hover:text-error ml-auto"
+                  onClick={async () => {
+                    await endpoints.deleteSkillFile(sf.slug);
+                    setSkillFiles((prev) => prev.filter((s) => s.slug !== sf.slug));
+                  }}
+                >
+                  Delete
+                </Button>
               </div>
             </div>
           </Card>
@@ -360,7 +431,12 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
           <Card title={editingSkill.slug ? `Editing: ${editingSkill.slug}` : "New Skill"}>
             <div className="space-y-3">
               {!editingSkill.slug && (
-                <Input label="Slug" value={editingSkill.slug} onChange={(e) => setEditingSkill({ ...editingSkill, slug: e.target.value })} placeholder="my-skill" />
+                <Input
+                  label="Slug"
+                  value={editingSkill.slug}
+                  onChange={(e) => setEditingSkill({ ...editingSkill, slug: e.target.value })}
+                  placeholder="my-skill"
+                />
               )}
               <TextArea
                 label="Content (SKILL.md)"
@@ -369,18 +445,32 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
                 rows={12}
               />
               <div className="flex gap-2">
-                <Button variant="primary" size="sm" onClick={async () => {
-                  if (!editingSkill.slug) return;
-                  if (skillFiles.find((s) => s.slug === editingSkill.slug)) {
-                    await endpoints.updateSkillFile(editingSkill.slug, editingSkill.content ?? "");
-                  } else {
-                    await endpoints.createSkillFile({ name: editingSkill.slug, content: editingSkill.content ?? "" });
-                  }
-                  const updated = await endpoints.listSkillFiles();
-                  setSkillFiles(updated);
-                  setEditingSkill(null);
-                }}>Save</Button>
-                <Button variant="ghost" size="sm" onClick={() => setEditingSkill(null)}>Cancel</Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={async () => {
+                    if (!editingSkill.slug) return;
+                    if (skillFiles.find((s) => s.slug === editingSkill.slug)) {
+                      await endpoints.updateSkillFile(
+                        editingSkill.slug,
+                        editingSkill.content ?? "",
+                      );
+                    } else {
+                      await endpoints.createSkillFile({
+                        name: editingSkill.slug,
+                        content: editingSkill.content ?? "",
+                      });
+                    }
+                    const updated = await endpoints.listSkillFiles();
+                    setSkillFiles(updated);
+                    setEditingSkill(null);
+                  }}
+                >
+                  Save
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setEditingSkill(null)}>
+                  Cancel
+                </Button>
               </div>
             </div>
           </Card>
@@ -393,7 +483,16 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
           title="Custom Skills"
           description="Inline skill definitions saved in your config"
           action={
-            <Button variant="secondary" size="sm" onClick={() => updateConfig((c) => { c.skills.entries.push({ ...emptySkill }); return c; })}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                updateConfig((c) => {
+                  c.skills.entries.push({ ...emptySkill });
+                  return c;
+                })
+              }
+            >
               Add Skill
             </Button>
           }
@@ -402,13 +501,60 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
           <Card key={i} title={skill.name || `Skill ${i + 1}`}>
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input label="Name" value={skill.name} onChange={(e) => updateConfig((c) => { c.skills.entries[i].name = e.target.value; return c; })} />
-                <Input label="Description" value={skill.description} onChange={(e) => updateConfig((c) => { c.skills.entries[i].description = e.target.value; return c; })} />
+                <Input
+                  label="Name"
+                  value={skill.name}
+                  onChange={(e) =>
+                    updateConfig((c) => {
+                      c.skills.entries[i].name = e.target.value;
+                      return c;
+                    })
+                  }
+                />
+                <Input
+                  label="Description"
+                  value={skill.description}
+                  onChange={(e) =>
+                    updateConfig((c) => {
+                      c.skills.entries[i].description = e.target.value;
+                      return c;
+                    })
+                  }
+                />
               </div>
-              <TextArea label="Content" value={skill.content} onChange={(e) => updateConfig((c) => { c.skills.entries[i].content = e.target.value; return c; })} rows={6} />
+              <TextArea
+                label="Content"
+                value={skill.content}
+                onChange={(e) =>
+                  updateConfig((c) => {
+                    c.skills.entries[i].content = e.target.value;
+                    return c;
+                  })
+                }
+                rows={6}
+              />
               <div className="flex items-center gap-4">
-                <Toggle label="Enabled" checked={skill.enabled} onChange={(v) => updateConfig((c) => { c.skills.entries[i].enabled = v; return c; })} />
-                <Button variant="ghost" size="sm" className="ml-auto hover:text-error" onClick={() => updateConfig((c) => { c.skills.entries.splice(i, 1); return c; })}>
+                <Toggle
+                  label="Enabled"
+                  checked={skill.enabled}
+                  onChange={(v) =>
+                    updateConfig((c) => {
+                      c.skills.entries[i].enabled = v;
+                      return c;
+                    })
+                  }
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto hover:text-error"
+                  onClick={() =>
+                    updateConfig((c) => {
+                      c.skills.entries.splice(i, 1);
+                      return c;
+                    })
+                  }
+                >
                   Remove
                 </Button>
               </div>
@@ -429,18 +575,38 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
         title="LLM Providers"
         description="Configure AI model providers and fallback order"
         action={
-          <Button variant="secondary" size="sm" onClick={() => updateConfig((c) => { c.llm.providers.push({ ...emptyProvider }); return c; })}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              updateConfig((c) => {
+                c.llm.providers.push({ ...emptyProvider });
+                return c;
+              })
+            }
+          >
             Add Provider
           </Button>
         }
       />
       {config.llm.providers.map((prov, i) => (
-        <ProviderCard key={i} prov={prov} index={i} updateConfig={updateConfig} probeStatus={providerStatuses[prov.name] ?? null} />
+        <ProviderCard
+          key={i}
+          prov={prov}
+          index={i}
+          updateConfig={updateConfig}
+          probeStatus={providerStatuses[prov.name] ?? null}
+        />
       ))}
       {config.llm.providers.length === 0 && (
         <p className="text-on-surface-variant text-sm">No providers configured.</p>
       )}
-      <SaveBar onClick={saveFullConfig} loading={saving} label="Save Providers" status={saveStatus} />
+      <SaveBar
+        onClick={saveFullConfig}
+        loading={saving}
+        label="Save Providers"
+        status={saveStatus}
+      />
     </div>
   );
 
@@ -453,10 +619,12 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => updateConfig((c) => {
-              c.mcp.servers.push({ ...emptyMCPServer });
-              return c;
-            })}
+            onClick={() =>
+              updateConfig((c) => {
+                c.mcp.servers.push({ ...emptyMCPServer });
+                return c;
+              })
+            }
           >
             Add MCP Server
           </Button>
@@ -464,19 +632,19 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
       />
 
       {config.mcp.servers.map((server, i) => (
-        <McpServerCard
-          key={server.id ?? i}
-          server={server}
-          index={i}
-          updateConfig={updateConfig}
-        />
+        <McpServerCard key={server.id ?? i} server={server} index={i} updateConfig={updateConfig} />
       ))}
 
       {config.mcp.servers.length === 0 && (
         <p className="text-on-surface-variant text-sm">No MCP servers configured.</p>
       )}
 
-      <SaveBar onClick={saveFullConfig} loading={saving} label="Save MCP Config" status={saveStatus} />
+      <SaveBar
+        onClick={saveFullConfig}
+        loading={saving}
+        label="Save MCP Config"
+        status={saveStatus}
+      />
     </div>
   );
 
@@ -484,9 +652,24 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
     <div className="space-y-6">
       <SectionHeader title="Soul" description="System prompt and assistant behavior" />
       <Card title="System Prompt">
-        <TextArea value={config.prompts.systemPrompt} onChange={(e) => updateConfig((c) => { c.prompts.systemPrompt = e.target.value; return c; })} rows={12} className="font-mono" />
+        <TextArea
+          value={config.prompts.systemPrompt}
+          onChange={(e) =>
+            updateConfig((c) => {
+              c.prompts.systemPrompt = e.target.value;
+              return c;
+            })
+          }
+          rows={12}
+          className="font-mono"
+        />
       </Card>
-      <SaveBar onClick={saveFullConfig} loading={saving} label="Save Soul Config" status={saveStatus} />
+      <SaveBar
+        onClick={saveFullConfig}
+        loading={saving}
+        label="Save Soul Config"
+        status={saveStatus}
+      />
     </div>
   );
 
@@ -546,17 +729,24 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
             key={mem.id ?? i}
             mem={mem}
             index={i}
-            onUpdate={(updated) => setMemories((prev) => { const next = [...prev]; next[i] = updated; return next; })}
+            onUpdate={(updated) =>
+              setMemories((prev) => {
+                const next = [...prev];
+                next[i] = updated;
+                return next;
+              })
+            }
             onDelete={() => handleDeleteMemory(mem.id, i)}
           />
         ))}
         {memories.length === 0 && !memoriesLoading && (
-          <p className="text-on-surface-variant text-sm">No memory entries yet. The assistant learns memories automatically via conversation.</p>
+          <p className="text-on-surface-variant text-sm">
+            No memory entries yet. The assistant learns memories automatically via conversation.
+          </p>
         )}
       </div>
     );
   };
-
 
   const renderSchedules = () => (
     <SchedulesTab
@@ -568,10 +758,43 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
     />
   );
 
-  const renderEmail = () => <EmailTab config={config} updateConfig={updateConfig} saving={saving} saveFullConfig={saveFullConfig} saveStatus={saveStatus} setError={setError} />;
-  const renderServers = () => <ServersTab config={config} updateConfig={updateConfig} saving={saving} saveFullConfig={saveFullConfig} saveStatus={saveStatus} />;
-  const renderTelegram = () => <TelegramTab config={config} updateConfig={updateConfig} saving={saving} saveFullConfig={saveFullConfig} saveStatus={saveStatus} />;
-  const renderDevices = () => <DevicesTab config={config} updateConfig={updateConfig} saving={saving} saveFullConfig={saveFullConfig} saveStatus={saveStatus} />;
+  const renderEmail = () => (
+    <EmailTab
+      config={config}
+      updateConfig={updateConfig}
+      saving={saving}
+      saveFullConfig={saveFullConfig}
+      saveStatus={saveStatus}
+      setError={setError}
+    />
+  );
+  const renderServers = () => (
+    <ServersTab
+      config={config}
+      updateConfig={updateConfig}
+      saving={saving}
+      saveFullConfig={saveFullConfig}
+      saveStatus={saveStatus}
+    />
+  );
+  const renderTelegram = () => (
+    <TelegramTab
+      config={config}
+      updateConfig={updateConfig}
+      saving={saving}
+      saveFullConfig={saveFullConfig}
+      saveStatus={saveStatus}
+    />
+  );
+  const renderDevices = () => (
+    <DevicesTab
+      config={config}
+      updateConfig={updateConfig}
+      saving={saving}
+      saveFullConfig={saveFullConfig}
+      saveStatus={saveStatus}
+    />
+  );
 
   const renderHeartbeat = () => {
     const providerOptions = [
@@ -581,34 +804,101 @@ export default function ConfigStudio({ requestedTab }: { requestedTab?: string }
         .map((p) => ({ value: p.model || p.name, label: `${p.name} . ${p.model || "default"}` })),
     ];
 
-  return (
-    <div className="space-y-6">
-      <SectionHeader title="Heartbeat" description="Autonomous heartbeat configuration" />
-      <Card>
-        <div className="space-y-4">
-          <Toggle label="Enabled" checked={config.heartbeat.enabled} onChange={(v) => updateConfig((c) => { c.heartbeat.enabled = v; return c; })} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input label="Interval (seconds)" type="number" value={config.heartbeat.intervalSeconds} onChange={(e) => updateConfig((c) => { c.heartbeat.intervalSeconds = parseInt(e.target.value) || 0; return c; })} />
-            <Select
-              label="Model"
-              options={providerOptions}
-              value={config.heartbeat.model}
-              onChange={(e) => updateConfig((c) => { c.heartbeat.model = e.target.value; return c; })}
+    return (
+      <div className="space-y-6">
+        <SectionHeader title="Heartbeat" description="Autonomous heartbeat configuration" />
+        <Card>
+          <div className="space-y-4">
+            <Toggle
+              label="Enabled"
+              checked={config.heartbeat.enabled}
+              onChange={(v) =>
+                updateConfig((c) => {
+                  c.heartbeat.enabled = v;
+                  return c;
+                })
+              }
             />
-            <Input label="Active Hours Start" type="time" value={config.heartbeat.activeHoursStart} onChange={(e) => updateConfig((c) => { c.heartbeat.activeHoursStart = e.target.value; return c; })} />
-            <Input label="Active Hours End" type="time" value={config.heartbeat.activeHoursEnd} onChange={(e) => updateConfig((c) => { c.heartbeat.activeHoursEnd = e.target.value; return c; })} />
-            <Input label="Timezone" value={config.heartbeat.timezone} onChange={(e) => updateConfig((c) => { c.heartbeat.timezone = e.target.value; return c; })} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Interval (seconds)"
+                type="number"
+                value={config.heartbeat.intervalSeconds}
+                onChange={(e) =>
+                  updateConfig((c) => {
+                    c.heartbeat.intervalSeconds = parseInt(e.target.value) || 0;
+                    return c;
+                  })
+                }
+              />
+              <Select
+                label="Model"
+                options={providerOptions}
+                value={config.heartbeat.model}
+                onChange={(e) =>
+                  updateConfig((c) => {
+                    c.heartbeat.model = e.target.value;
+                    return c;
+                  })
+                }
+              />
+              <Input
+                label="Active Hours Start"
+                type="time"
+                value={config.heartbeat.activeHoursStart}
+                onChange={(e) =>
+                  updateConfig((c) => {
+                    c.heartbeat.activeHoursStart = e.target.value;
+                    return c;
+                  })
+                }
+              />
+              <Input
+                label="Active Hours End"
+                type="time"
+                value={config.heartbeat.activeHoursEnd}
+                onChange={(e) =>
+                  updateConfig((c) => {
+                    c.heartbeat.activeHoursEnd = e.target.value;
+                    return c;
+                  })
+                }
+              />
+              <Input
+                label="Timezone"
+                value={config.heartbeat.timezone}
+                onChange={(e) =>
+                  updateConfig((c) => {
+                    c.heartbeat.timezone = e.target.value;
+                    return c;
+                  })
+                }
+              />
+            </div>
           </div>
-        </div>
-      </Card>
-      <Card title="Heartbeat Prompt">
-        <TextArea value={config.prompts.heartbeatPrompt} onChange={(e) => updateConfig((c) => { c.prompts.heartbeatPrompt = e.target.value; return c; })} rows={8} className="font-mono" />
-      </Card>
-      <SaveBar onClick={saveFullConfig} loading={saving} label="Save Heartbeat" status={saveStatus} />
-    </div>
+        </Card>
+        <Card title="Heartbeat Prompt">
+          <TextArea
+            value={config.prompts.heartbeatPrompt}
+            onChange={(e) =>
+              updateConfig((c) => {
+                c.prompts.heartbeatPrompt = e.target.value;
+                return c;
+              })
+            }
+            rows={8}
+            className="font-mono"
+          />
+        </Card>
+        <SaveBar
+          onClick={saveFullConfig}
+          loading={saving}
+          label="Save Heartbeat"
+          status={saveStatus}
+        />
+      </div>
     );
   };
-
 
   const panels: Record<string, () => ReactElement> = {
     email: renderEmail,

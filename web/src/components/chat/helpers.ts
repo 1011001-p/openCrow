@@ -52,11 +52,13 @@ export function displayValue(value: unknown): { text: string; isJson: boolean } 
 /** Split content by markdown image patterns and render inline images. */
 export function renderMessageContent(content: string) {
   const parts = content.split(/(!\[.*?\]\(data:[^)]+\))/g);
-  return parts.map((part, i) => {
-    const imgMatch = part.match(/!\[(.*?)\]\((data:[^)]+)\)/);
-    if (imgMatch) {
-      return { kind: "image" as const, src: imgMatch[2], alt: imgMatch[1], key: i };
-    }
-    return part ? { kind: "text" as const, text: part, key: i } : null;
-  }).filter(Boolean);
+  return parts
+    .map((part, i) => {
+      const imgMatch = part.match(/!\[(.*?)\]\((data:[^)]+)\)/);
+      if (imgMatch) {
+        return { kind: "image" as const, src: imgMatch[2], alt: imgMatch[1], key: i };
+      }
+      return part ? { kind: "text" as const, text: part, key: i } : null;
+    })
+    .filter(Boolean);
 }

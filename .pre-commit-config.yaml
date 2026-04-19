@@ -1,0 +1,11 @@
+repos:
+  - repo: local
+    hooks:
+      - id: prettier-web
+        name: Prettier (web/src)
+        language: node
+        entry: npx prettier --write
+        files: ^web/src/
+        types_or: [ts, tsx, javascript, jsx, json, css]
+        pass_filenames: true
+        additional_dependencies: []

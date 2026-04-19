@@ -1,12 +1,33 @@
-import { useState, useEffect, useRef, useCallback, type ChangeEvent, type KeyboardEvent } from "react";
-import { endpoints, type ConversationDTO, type MessageDTO, type ProviderConfig, type ToolCallRecord, type TokenUsage } from "@/lib/api";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
+import {
+  endpoints,
+  type ConversationDTO,
+  type MessageDTO,
+  type ProviderConfig,
+  type ToolCallRecord,
+  type TokenUsage,
+} from "@/lib/api";
 
-export function useChatSession({ activeConversationId, onActiveConversationChange, onConversationsUpdate }: { activeConversationId: string | null; onActiveConversationChange: (id: string | null) => void; onConversationsUpdate: (conversations: ConversationDTO[]) => void; }) {
+export function useChatSession({
+  activeConversationId,
+  onActiveConversationChange,
+  onConversationsUpdate,
+}: {
+  activeConversationId: string | null;
+  onActiveConversationChange: (id: string | null) => void;
+  onConversationsUpdate: (conversations: ConversationDTO[]) => void;
+}) {
   // State
   const [conversations, setConversations] = useState<ConversationDTO[]>([]);
   const [messages, setMessages] = useState<MessageDTO[]>([]);
   const [toolCallHistory, setToolCallHistory] = useState<ToolCallRecord[]>([]);
-  const [expandedToolCalls, setExpandedToolCalls] = useState<Set<string>>(new Set());
   const [composing, setComposing] = useState("");
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>("");
@@ -102,41 +123,41 @@ export function useChatSession({ activeConversationId, onActiveConversationChang
   }, []);
 
   // ─── Regenerate assistant message ───
-  const handleRegenerate = useCallback(async (msgId: string, convId: string) => {
-    if (!convId || regeneratingId) return;
-    const targetMessage = messages.find((m) => m.id === msgId);
-    const regenerateAt = targetMessage ? new Date(targetMessage.createdAt).getTime() : null;
-    setRegeneratingId(msgId);
-    // Replace message content with empty streaming placeholder
-    setMessages((prev) =>
-      prev.map((m) => (m.id === msgId ? { ...m, content: "" } : m))
-    );
-    if (regenerateAt != null) {
-      setToolCallHistory((prev) =>
-        prev.filter((tc) => new Date(tc.createdAt).getTime() < regenerateAt)
-      );
-    }
-    try {
-      await endpoints.regenerateMessage(convId, msgId, (token) => {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === msgId ? { ...m, content: m.content + token } : m))
+  const handleRegenerate = useCallback(
+    async (msgId: string, convId: string) => {
+      if (!convId || regeneratingId) return;
+      const targetMessage = messages.find((m) => m.id === msgId);
+      const regenerateAt = targetMessage ? new Date(targetMessage.createdAt).getTime() : null;
+      setRegeneratingId(msgId);
+      // Replace message content with empty streaming placeholder
+      setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, content: "" } : m)));
+      if (regenerateAt != null) {
+        setToolCallHistory((prev) =>
+          prev.filter((tc) => new Date(tc.createdAt).getTime() < regenerateAt),
         );
-      });
-      const [msgs, calls] = await Promise.all([
-        endpoints.getMessages(convId),
-        endpoints.getToolCalls(convId),
-      ]);
-      setMessages(msgs ?? []);
-      setToolCallHistory(calls ?? []);
-    } catch (err) {
-      console.error("Regenerate failed:", err);
-      const msgs = await endpoints.getMessages(convId).catch(() => null);
-      if (msgs) setMessages(msgs);
-    } finally {
-      setRegeneratingId(null);
-    }
-  }, [messages, regeneratingId]);
-
+      }
+      try {
+        await endpoints.regenerateMessage(convId, msgId, (token) => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === msgId ? { ...m, content: m.content + token } : m)),
+          );
+        });
+        const [msgs, calls] = await Promise.all([
+          endpoints.getMessages(convId),
+          endpoints.getToolCalls(convId),
+        ]);
+        setMessages(msgs ?? []);
+        setToolCallHistory(calls ?? []);
+      } catch (err) {
+        console.error("Regenerate failed:", err);
+        const msgs = await endpoints.getMessages(convId).catch(() => null);
+        if (msgs) setMessages(msgs);
+      } finally {
+        setRegeneratingId(null);
+      }
+    },
+    [messages, regeneratingId],
+  );
 
   // ─── Send message ───
   const handleSend = useCallback(async () => {
@@ -191,22 +212,23 @@ export function useChatSession({ activeConversationId, onActiveConversationChang
     try {
       // Persist user message
       const savedUser = await endpoints.createMessage(conversationId, "user", fullContent);
-      setMessages((prev) =>
-        prev.map((m) => (m.id === optimisticUser.id ? savedUser : m))
-      );
+      setMessages((prev) => prev.map((m) => (m.id === optimisticUser.id ? savedUser : m)));
 
       const providerOrder = selectedProvider ? [selectedProvider] : undefined;
 
       // Add a streaming assistant placeholder
       const streamId = `stream-${Date.now()}`;
       setStreamingMsgId(streamId);
-      setMessages((prev) => [...prev, {
-        id: streamId,
-        conversationId,
-        role: "assistant",
-        content: "",
-        createdAt: new Date().toISOString(),
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: streamId,
+          conversationId,
+          role: "assistant",
+          content: "",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
 
       let fullOutput = "";
       const finalOutput = await endpoints.streamComplete(
@@ -215,7 +237,7 @@ export function useChatSession({ activeConversationId, onActiveConversationChang
         (token: string) => {
           fullOutput += token;
           setMessages((prev) =>
-            prev.map((m) => m.id === streamId ? { ...m, content: fullOutput } : m)
+            prev.map((m) => (m.id === streamId ? { ...m, content: fullOutput } : m)),
           );
         },
         providerOrder,
@@ -227,7 +249,13 @@ export function useChatSession({ activeConversationId, onActiveConversationChang
               id: `live-${Date.now()}-${Math.random()}`,
               toolName: name,
               kind: kind ?? "TOOL",
-              arguments: (() => { try { return JSON.parse(args); } catch { return {}; } })(),
+              arguments: (() => {
+                try {
+                  return JSON.parse(args);
+                } catch {
+                  return {};
+                }
+              })(),
               createdAt: new Date().toISOString(),
             },
           ]);
@@ -239,21 +267,19 @@ export function useChatSession({ activeConversationId, onActiveConversationChang
       setStreamingMsgId(null);
       if (finalOutput && finalOutput !== fullOutput) {
         setMessages((prev) =>
-          prev.map((m) => m.id === streamId ? { ...m, content: finalOutput } : m)
+          prev.map((m) => (m.id === streamId ? { ...m, content: finalOutput } : m)),
         );
       }
       // Refresh persisted messages + tool calls from server (replaces optimistic stream IDs)
       if (conversationId) {
-        Promise.all([
-          endpoints.getMessages(conversationId),
-          endpoints.getToolCalls(conversationId),
-        ]).then(([msgs, calls]) => {
-          setMessages(msgs ?? []);
-          setToolCallHistory(calls ?? []);
-        }).catch(() => {});
+        Promise.all([endpoints.getMessages(conversationId), endpoints.getToolCalls(conversationId)])
+          .then(([msgs, calls]) => {
+            setMessages(msgs ?? []);
+            setToolCallHistory(calls ?? []);
+          })
+          .catch(() => {});
       }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
@@ -269,7 +295,15 @@ export function useChatSession({ activeConversationId, onActiveConversationChang
       setStreamingMsgId(null);
       composeRef.current?.focus();
     }
-  }, [activeConversationId, composing, sending, onActiveConversationChange, onConversationsUpdate]);
+  }, [
+    activeConversationId,
+    attachedFiles,
+    composing,
+    onActiveConversationChange,
+    onConversationsUpdate,
+    selectedProvider,
+    sending,
+  ]);
 
   const handleFilesPicked = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -296,7 +330,7 @@ export function useChatSession({ activeConversationId, onActiveConversationChang
         handleSend();
       }
     },
-    [handleSend]
+    [handleSend],
   );
 
   const handleMic = useCallback(async () => {
@@ -312,7 +346,9 @@ export function useChatSession({ activeConversationId, onActiveConversationChang
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mr = new MediaRecorder(stream);
       audioChunksRef.current = [];
-      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
       mr.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         setRecording(false);
@@ -337,5 +373,35 @@ export function useChatSession({ activeConversationId, onActiveConversationChang
       // microphone permission denied or unavailable
     }
   }, [recording, transcribing]);
-  return { conversations, messages, toolCallHistory, composing, setComposing, providers, selectedProvider, setSelectedProvider, sending, lastUsage, streamingMsgId, loadingConvs, loadingMsgs, attachedFiles, setAttachedFiles, regeneratingId, copiedId, recording, transcribing, messagesEndRef, composeRef, fileInputRef, handleSend, handleRegenerate, handleCopy, handleMic, handleFilesPicked, removeAttachment };
+  return {
+    conversations,
+    messages,
+    toolCallHistory,
+    composing,
+    setComposing,
+    providers,
+    selectedProvider,
+    setSelectedProvider,
+    sending,
+    lastUsage,
+    streamingMsgId,
+    loadingConvs,
+    loadingMsgs,
+    attachedFiles,
+    setAttachedFiles,
+    regeneratingId,
+    copiedId,
+    recording,
+    transcribing,
+    messagesEndRef,
+    composeRef,
+    fileInputRef,
+    handleSend,
+    handleRegenerate,
+    handleCopy,
+    handleMic,
+    handleFilesPicked,
+    removeAttachment,
+    handleKeyDown,
+  };
 }

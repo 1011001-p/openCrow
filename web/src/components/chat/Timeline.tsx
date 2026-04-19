@@ -12,7 +12,17 @@ export function ToolCallItem({ tc, isLive }: { tc: ToolCallRecord; isLive: boole
 
   // Extract the primary "command" arg (command, query, content, prompt, action -- first string arg)
   const args = tc.arguments ?? {};
-  const primaryArgKeys = ["command", "query", "content", "prompt", "action", "url", "messageId", "memoryId", "taskId"];
+  const primaryArgKeys = [
+    "command",
+    "query",
+    "content",
+    "prompt",
+    "action",
+    "url",
+    "messageId",
+    "memoryId",
+    "taskId",
+  ];
   const primaryKey = primaryArgKeys.find((k) => k in args) ?? Object.keys(args)[0];
   const primaryVal = primaryKey ? String(args[primaryKey] ?? "") : "";
 
@@ -47,7 +57,9 @@ export function ToolCallItem({ tc, isLive }: { tc: ToolCallRecord; isLive: boole
         {/* Compact header -- always visible */}
         <div className="flex items-center gap-2 px-3 py-1.5">
           <ToolIcon className="text-[#6272a4] shrink-0 w-3.5 h-3.5" />
-          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded border font-semibold ${toolKind === "MCP" ? "text-violet border-violet/40 bg-violet/10" : "text-cyan border-cyan/40 bg-cyan/10"}`}>
+          <span
+            className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded border font-semibold ${toolKind === "MCP" ? "text-violet border-violet/40 bg-violet/10" : "text-cyan border-cyan/40 bg-cyan/10"}`}
+          >
             [{toolKind}]
           </span>
           <span className="text-[#8be9fd] shrink-0">{tc.toolName}</span>
@@ -68,15 +80,28 @@ export function ToolCallItem({ tc, isLive }: { tc: ToolCallRecord; isLive: boole
                 {Object.entries(args).map(([k, v]) => {
                   const isObj = typeof v === "object" && v !== null;
                   const prettyVal = isObj ? JSON.stringify(v, null, 2) : String(v);
-                  const looksLikeJson = !isObj && (() => { try { JSON.parse(String(v)); return true; } catch { return false; } })();
-                  const displayVal = looksLikeJson ? JSON.stringify(JSON.parse(String(v)), null, 2) : prettyVal;
+                  const looksLikeJson =
+                    !isObj &&
+                    (() => {
+                      try {
+                        JSON.parse(String(v));
+                        return true;
+                      } catch {
+                        return false;
+                      }
+                    })();
+                  const displayVal = looksLikeJson
+                    ? JSON.stringify(JSON.parse(String(v)), null, 2)
+                    : prettyVal;
                   const multiline = displayVal.includes("\n");
                   return (
                     <div key={k}>
                       <span className="text-[#f1fa8c]">{k}</span>
                       <span className="text-[#6272a4]">=</span>
                       {multiline ? (
-                        <pre className="text-[#50fa7b] whitespace-pre-wrap break-all mt-0.5 pl-2 border-l border-[#6272a4]/30">{displayVal}</pre>
+                        <pre className="text-[#50fa7b] whitespace-pre-wrap break-all mt-0.5 pl-2 border-l border-[#6272a4]/30">
+                          {displayVal}
+                        </pre>
                       ) : (
                         <span className="text-[#50fa7b] break-all ml-1">{displayVal}</span>
                       )}
@@ -87,7 +112,11 @@ export function ToolCallItem({ tc, isLive }: { tc: ToolCallRecord; isLive: boole
             )}
             {/* Stdout / output */}
             {stdout && (
-              <pre className={`whitespace-pre-wrap break-all leading-relaxed ${stdoutIsJson ? "text-[#f8f8f2]/80 bg-black/20 rounded p-2" : "text-[#50fa7b] opacity-80"}`}>{stdout}</pre>
+              <pre
+                className={`whitespace-pre-wrap break-all leading-relaxed ${stdoutIsJson ? "text-[#f8f8f2]/80 bg-black/20 rounded p-2" : "text-[#50fa7b] opacity-80"}`}
+              >
+                {stdout}
+              </pre>
             )}
             {/* Error */}
             {tc.error && (
@@ -118,9 +147,7 @@ export function MessageItem({
   if (msg.role === "system") {
     return (
       <div className="text-center animate-in fade-in slide-in-from-bottom-1 duration-300">
-        <p className="text-xs text-on-surface-variant font-mono">
-          {msg.content}
-        </p>
+        <p className="text-xs text-on-surface-variant font-mono">{msg.content}</p>
       </div>
     );
   }
@@ -129,13 +156,17 @@ export function MessageItem({
   const canRegenerate = msg.role === "assistant" && isUuid(msg.id) && !msg.id.startsWith("stream-");
 
   return (
-    <div className={`flex group ${isUser ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+    <div
+      className={`flex group ${isUser ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}
+    >
       {!isUser && (
         <div className="shrink-0 mt-3 mr-2">
           <span className="block h-2 w-2 rounded-full bg-cyan" />
         </div>
       )}
-      <div className={`max-w-[70%] rounded-lg p-4 border ${isUser ? "bg-violet/5 border-violet/20" : "bg-surface-high border-outline-ghost"}`}>
+      <div
+        className={`max-w-[70%] rounded-lg p-4 border ${isUser ? "bg-violet/5 border-violet/20" : "bg-surface-high border-outline-ghost"}`}
+      >
         <p className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-on-surface-variant font-mono mb-1">
           {msg.role}
           <span className="inline-block h-1 w-1 rounded-full bg-on-surface-variant/50" />

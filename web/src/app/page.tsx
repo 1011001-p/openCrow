@@ -52,11 +52,7 @@ export default function HomePage() {
     setError("");
     setSubmitting(true);
     try {
-      const res = await endpoints.login(
-        username,
-        password,
-        device || "Web Browser"
-      );
+      const res = await endpoints.login(username, password, device || "Web Browser");
       setTokens(res.tokens.accessToken, res.tokens.refreshToken);
       setAuthed(true);
     } catch (err: unknown) {
@@ -148,9 +144,7 @@ export default function HomePage() {
               placeholder="Web Browser"
             />
 
-            {error && (
-              <p className="text-error text-xs font-mono break-words">{error}</p>
-            )}
+            {error && <p className="text-error text-xs font-mono break-words">{error}</p>}
 
             <Button
               type="submit"

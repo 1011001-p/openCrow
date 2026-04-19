@@ -73,7 +73,6 @@ import type {
   DeviceTaskDTO,
   CreateDeviceTaskRequest,
   CompleteDeviceTaskRequest,
-  CompanionAppConfig,
   DeviceCapability,
   DeviceRegistration,
 } from "./api-types";
@@ -82,9 +81,7 @@ import type {
 // Falls back to baked-in env vars only when the meta tag is unavailable (e.g. SSR).
 export function getApiBase(): string {
   if (typeof document !== "undefined") {
-    const content = document.head
-      .querySelector('meta[name="x-api-base"]')
-      ?.getAttribute("content");
+    const content = document.head.querySelector('meta[name="x-api-base"]')?.getAttribute("content");
     if (content) return content;
   }
   return "http://localhost:8080";
@@ -143,7 +140,9 @@ let _refreshPromise: Promise<boolean> | null = null;
 
 async function refreshAccessToken(): Promise<boolean> {
   if (_refreshPromise) return _refreshPromise;
-  _refreshPromise = _doRefresh().finally(() => { _refreshPromise = null; });
+  _refreshPromise = _doRefresh().finally(() => {
+    _refreshPromise = null;
+  });
   return _refreshPromise;
 }
 
@@ -176,10 +175,7 @@ function getClientTimezone(): string {
   }
 }
 
-export async function api<T = unknown>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+export async function api<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   // Don't force Content-Type for FormData (browser sets it with boundary automatically)
   const isFormData = options.body instanceof FormData;
   const headers: Record<string, string> = {
@@ -222,12 +218,11 @@ export async function api<T = unknown>(
 export class ApiError extends Error {
   constructor(
     public status: number,
-    public body: string
+    public body: string,
   ) {
     super(`API ${status}: ${body}`);
   }
 }
-
 
 // ─── Config normalization (server ↔ client shape) ───
 
@@ -241,7 +236,8 @@ function normalizeUserConfig(raw: ServerUserConfig): UserConfig {
     if (!name) continue;
     const byName = enabledRaw[name];
     const byID = tool.id ? enabledRaw[tool.id] : undefined;
-    enabledTools[name] = typeof byName === "boolean" ? byName : typeof byID === "boolean" ? byID : true;
+    enabledTools[name] =
+      typeof byName === "boolean" ? byName : typeof byID === "boolean" ? byID : true;
   }
 
   const heartbeat = raw?.heartbeat ?? {};
@@ -252,9 +248,13 @@ function normalizeUserConfig(raw: ServerUserConfig): UserConfig {
         ...acct,
         tls: acct.tls ?? acct.useTls ?? true,
       })),
-      telegramBots: Array.isArray(raw?.integrations?.telegramBots) ? raw.integrations!.telegramBots : [],
+      telegramBots: Array.isArray(raw?.integrations?.telegramBots)
+        ? raw.integrations!.telegramBots
+        : [],
       sshServers: Array.isArray(raw?.integrations?.sshServers) ? raw.integrations!.sshServers : [],
-      companionApps: Array.isArray(raw?.integrations?.companionApps) ? raw.integrations!.companionApps : [],
+      companionApps: Array.isArray(raw?.integrations?.companionApps)
+        ? raw.integrations!.companionApps
+        : [],
       defaultNotificationBotId: raw?.integrations?.defaultNotificationBotId ?? "",
     },
     tools: {
@@ -363,7 +363,13 @@ export const endpoints = {
   putConfig: (config: UserConfig) =>
     api("/v1/config", { method: "PUT", body: JSON.stringify(toServerUserConfig(config)) }),
 
-  testProvider: (provider: { kind: string; name: string; baseUrl: string; apiKeyRef: string; model: string }) =>
+  testProvider: (provider: {
+    kind: string;
+    name: string;
+    baseUrl: string;
+    apiKeyRef: string;
+    model: string;
+  }) =>
     api<{ ok: boolean; latencyMs: number; error?: string; model?: string }>("/v1/providers/test", {
       method: "POST",
       body: JSON.stringify(provider),
@@ -374,7 +380,17 @@ export const endpoints = {
       body: JSON.stringify(provider),
     }),
   getProvidersStatus: () =>
-    api<{ providers: Array<{ name: string; kind: string; model: string; enabled: boolean; ok: boolean; latencyMs: number; error?: string }> }>("/v1/providers/status"),
+    api<{
+      providers: Array<{
+        name: string;
+        kind: string;
+        model: string;
+        enabled: boolean;
+        ok: boolean;
+        latencyMs: number;
+        error?: string;
+      }>;
+    }>("/v1/providers/status"),
   getTools: async () => {
     const tools = await api<ServerUserConfig["tools"]>("/v1/tools");
     return normalizeUserConfig({ tools }).tools;
@@ -388,7 +404,7 @@ export const endpoints = {
         enabled: Object.fromEntries(
           (tools.definitions ?? [])
             .filter((tool) => !!(tool.id || tool.name))
-            .map((tool) => [tool.id || tool.name, tools.enabledTools?.[tool.name] ?? true])
+            .map((tool) => [tool.id || tool.name, tools.enabledTools?.[tool.name] ?? true]),
         ),
       }),
     }),
@@ -414,10 +430,12 @@ export const endpoints = {
     api<SkillFile>("/v1/skill-files", { method: "POST", body: JSON.stringify(data) }),
   updateSkillFile: (slug: string, content: string) =>
     api<SkillFile>(`/v1/skill-files/${slug}`, { method: "PUT", body: JSON.stringify({ content }) }),
-  deleteSkillFile: (slug: string) =>
-    api(`/v1/skill-files/${slug}`, { method: "DELETE" }),
+  deleteSkillFile: (slug: string) => api(`/v1/skill-files/${slug}`, { method: "DELETE" }),
   installSkills: (source: string) =>
-    api<InstallSkillsResult>("/v1/skill-files/install", { method: "POST", body: JSON.stringify({ source }) }),
+    api<InstallSkillsResult>("/v1/skill-files/install", {
+      method: "POST",
+      body: JSON.stringify({ source }),
+    }),
 
   // Conversations
   listConversations: async () => {
@@ -430,15 +448,16 @@ export const endpoints = {
       method: "POST",
       body: JSON.stringify({ title }),
     }),
-  deleteConversation: (id: string) =>
-    api(`/v1/conversations/${id}`, { method: "DELETE" }),
+  deleteConversation: (id: string) => api(`/v1/conversations/${id}`, { method: "DELETE" }),
   getMessages: async (convId: string) => {
     const data = await api<MessageDTO[] | MessagesResponse>(`/v1/conversations/${convId}/messages`);
     if (Array.isArray(data)) return data;
     return Array.isArray(data?.messages) ? data.messages : [];
   },
   getToolCalls: async (convId: string): Promise<ToolCallRecord[]> => {
-    const data = await api<{ toolCalls: ToolCallRecord[] }>(`/v1/conversations/${convId}/tool-calls`);
+    const data = await api<{ toolCalls: ToolCallRecord[] }>(
+      `/v1/conversations/${convId}/tool-calls`,
+    );
     return data?.toolCalls ?? [];
   },
   createMessage: (convId: string, role: string, content: string) =>
@@ -455,7 +474,7 @@ export const endpoints = {
     }),
 
   // Streaming completion: calls onToken for each delta, returns full output
-   streamComplete: async (
+  streamComplete: async (
     conversationId: string,
     message: string,
     onToken: (token: string) => void,
@@ -533,17 +552,18 @@ export const endpoints = {
   getRealtimeLastEvent: () => api<{ event: RealtimeEvent | null }>("/v1/realtime/last"),
 
   // Worker status
-  getWorkerStatus: () =>
-    api<{ workers: WorkerStat[] }>("/v1/status/workers"),
+  getWorkerStatus: () => api<{ workers: WorkerStat[] }>("/v1/status/workers"),
 
   getWorkerLogs: (worker: string) =>
-    api<{ worker: string; entries: WorkerLogEntry[] }>(`/v1/workers/logs?worker=${encodeURIComponent(worker)}`),
+    api<{ worker: string; entries: WorkerLogEntry[] }>(
+      `/v1/workers/logs?worker=${encodeURIComponent(worker)}`,
+    ),
 
   // Regenerate a message (streams SSE like streamComplete)
   regenerateMessage: async (
     convId: string,
     msgId: string,
-    onToken: (token: string) => void
+    onToken: (token: string) => void,
   ): Promise<string> => {
     const token = getAccessToken();
     const headers: Record<string, string> = {
@@ -554,10 +574,13 @@ export const endpoints = {
     if (clientTimezone) headers["X-Client-Timezone"] = clientTimezone;
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    const res = await fetch(`${getApiBase()}/v1/conversations/${convId}/messages/${msgId}/regenerate`, {
-      method: "POST",
-      headers,
-    });
+    const res = await fetch(
+      `${getApiBase()}/v1/conversations/${convId}/messages/${msgId}/regenerate`,
+      {
+        method: "POST",
+        headers,
+      },
+    );
 
     if (!res.ok || !res.body) {
       const text = await res.text();
@@ -607,8 +630,7 @@ export const endpoints = {
   listMemories: () => api<{ memories: MemoryEntry[] }>("/v1/memory"),
   createMemory: (entry: Omit<MemoryEntry, "id">) =>
     api<MemoryEntry>("/v1/memory", { method: "POST", body: JSON.stringify(entry) }),
-  deleteMemory: (id: string) =>
-    api(`/v1/memory/${id}`, { method: "DELETE" }),
+  deleteMemory: (id: string) => api(`/v1/memory/${id}`, { method: "DELETE" }),
 
   // Email test
   testEmailConnection: (params: {
@@ -664,21 +686,38 @@ export const endpoints = {
 
   // Tasks
   listTasks: () => api<{ tasks: TaskDTO[] }>("/v1/tasks"),
-  createTask: (task: { description: string; prompt: string; executeAt: string; cronExpression?: string | null }) =>
-    api<TaskDTO>("/v1/tasks", { method: "POST", body: JSON.stringify(task) }),
+  createTask: (task: {
+    description: string;
+    prompt: string;
+    executeAt: string;
+    cronExpression?: string | null;
+  }) => api<TaskDTO>("/v1/tasks", { method: "POST", body: JSON.stringify(task) }),
   deleteTask: (id: string) => api(`/v1/tasks/${id}`, { method: "DELETE" }),
-  updateTask: (id: string, patch: { description?: string; prompt?: string; executeAt?: string; cronExpression?: string | null; status?: string }) =>
-    api<TaskDTO>(`/v1/tasks/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  updateTask: (
+    id: string,
+    patch: {
+      description?: string;
+      prompt?: string;
+      executeAt?: string;
+      cronExpression?: string | null;
+      status?: string;
+    },
+  ) => api<TaskDTO>(`/v1/tasks/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
   // Device Tasks
   listDeviceTasks: () => api<{ tasks: DeviceTaskDTO[] }>("/v1/devices/tasks"),
-  createDeviceTask: (req: CreateDeviceTaskRequest) => api<DeviceTaskDTO>("/v1/devices/tasks", { method: "POST", body: JSON.stringify(req) }),
+  createDeviceTask: (req: CreateDeviceTaskRequest) =>
+    api<DeviceTaskDTO>("/v1/devices/tasks", { method: "POST", body: JSON.stringify(req) }),
   deleteDeviceTask: (id: string) => api(`/v1/devices/tasks/${id}`, { method: "DELETE" }),
-  completeDeviceTask: (id: string, req: CompleteDeviceTaskRequest) => api(`/v1/devices/tasks/${id}/complete`, { method: "POST", body: JSON.stringify(req) }),
+  completeDeviceTask: (id: string, req: CompleteDeviceTaskRequest) =>
+    api(`/v1/devices/tasks/${id}/complete`, { method: "POST", body: JSON.stringify(req) }),
 
   // Device Registration
   registerDevice: (deviceId: string, capabilities: DeviceCapability[]) =>
-    api<DeviceRegistration>(`/v1/devices/${deviceId}/register`, { method: "POST", body: JSON.stringify({ capabilities }) }),
+    api<DeviceRegistration>(`/v1/devices/${deviceId}/register`, {
+      method: "POST",
+      body: JSON.stringify({ capabilities }),
+    }),
   listDeviceRegistrations: () =>
     api<{ registrations: DeviceRegistration[] }>("/v1/devices/registrations"),
 

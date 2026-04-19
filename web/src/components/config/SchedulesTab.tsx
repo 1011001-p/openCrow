@@ -31,7 +31,12 @@ export function SchedulesTab({
   setTasks: React.Dispatch<React.SetStateAction<TaskDTO[]>>;
   setError: (e: string | null) => void;
 }) {
-  const [newTask, setNewTask] = useState({ description: "", prompt: "", executeAt: "", cronExpression: "" });
+  const [newTask, setNewTask] = useState({
+    description: "",
+    prompt: "",
+    executeAt: "",
+    cronExpression: "",
+  });
   const [creating, setCreating] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
@@ -107,9 +112,7 @@ export function SchedulesTab({
                 onChange={(e) => setNewTask((p) => ({ ...p, cronExpression: e.target.value }))}
                 placeholder="0 9 * * 1-5"
               />
-              {cronHint && (
-                <p className="mt-1 text-xs text-cyan/80">{cronHint}</p>
-              )}
+              {cronHint && <p className="mt-1 text-xs text-cyan/80">{cronHint}</p>}
             </div>
           </div>
           <TextArea
@@ -135,7 +138,11 @@ export function SchedulesTab({
         {tasks.map((task) => {
           const cronDesc = task.cronExpression ? parseCron(task.cronExpression) : null;
           const statusColor =
-            task.status === "PENDING" ? "text-cyan" : task.status === "FAILED" ? "text-error" : "text-on-surface-variant";
+            task.status === "PENDING"
+              ? "text-cyan"
+              : task.status === "FAILED"
+                ? "text-error"
+                : "text-on-surface-variant";
           return (
             <div
               key={task.id}
@@ -144,7 +151,7 @@ export function SchedulesTab({
               <div className="flex items-start gap-3">
                 <button
                   type="button"
-                  onClick={() => setExpandedTaskId((prev) => prev === task.id ? null : task.id)}
+                  onClick={() => setExpandedTaskId((prev) => (prev === task.id ? null : task.id))}
                   className="flex-1 min-w-0 text-left space-y-1"
                 >
                   <div className="flex items-center gap-2 flex-wrap">
@@ -153,22 +160,33 @@ export function SchedulesTab({
                     </span>
                     <span className={`text-xs font-mono ${statusColor}`}>{task.status}</span>
                     {task.consecutiveFailures > 0 && (
-                      <span className="text-xs text-error">{task.consecutiveFailures} failure{task.consecutiveFailures !== 1 ? "s" : ""}</span>
+                      <span className="text-xs text-error">
+                        {task.consecutiveFailures} failure
+                        {task.consecutiveFailures !== 1 ? "s" : ""}
+                      </span>
                     )}
-                    <span className="ml-auto text-on-surface-variant text-xs">{expandedTaskId === task.id ? "▲" : "▼"}</span>
+                    <span className="ml-auto text-on-surface-variant text-xs">
+                      {expandedTaskId === task.id ? "▲" : "▼"}
+                    </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-on-surface-variant">
                     <span>{formatDate(task.executeAt)}</span>
                     {task.cronExpression && (
                       <span>
                         <code className="font-mono text-cyan">{task.cronExpression}</code>
-                        {cronDesc && <span className="ml-1 text-on-surface-variant/70">-- {cronDesc}</span>}
+                        {cronDesc && (
+                          <span className="ml-1 text-on-surface-variant/70">-- {cronDesc}</span>
+                        )}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-on-surface-variant/60 font-mono truncate">{task.prompt}</p>
+                  <p className="text-xs text-on-surface-variant/60 font-mono truncate">
+                    {task.prompt}
+                  </p>
                   {task.lastResult && (
-                    <p className="text-xs text-on-surface-variant/70 truncate">↳ {task.lastResult.split("\n")[0]}</p>
+                    <p className="text-xs text-on-surface-variant/70 truncate">
+                      ↳ {task.lastResult.split("\n")[0]}
+                    </p>
                   )}
                 </button>
                 <button
@@ -182,12 +200,20 @@ export function SchedulesTab({
               {expandedTaskId === task.id && (
                 <div className="rounded-md border border-outline-ghost bg-surface-low px-3 py-3 space-y-3">
                   <div>
-                    <p className="text-[11px] uppercase tracking-wider text-on-surface-variant font-mono mb-1">Prompt</p>
-                    <pre className="whitespace-pre-wrap break-words text-xs text-on-surface font-mono">{task.prompt}</pre>
+                    <p className="text-[11px] uppercase tracking-wider text-on-surface-variant font-mono mb-1">
+                      Prompt
+                    </p>
+                    <pre className="whitespace-pre-wrap break-words text-xs text-on-surface font-mono">
+                      {task.prompt}
+                    </pre>
                   </div>
                   <div>
-                    <p className="text-[11px] uppercase tracking-wider text-on-surface-variant font-mono mb-1">Last execution result</p>
-                    <pre className="whitespace-pre-wrap break-words text-xs text-on-surface font-mono">{task.lastResult || "No execution result yet."}</pre>
+                    <p className="text-[11px] uppercase tracking-wider text-on-surface-variant font-mono mb-1">
+                      Last execution result
+                    </p>
+                    <pre className="whitespace-pre-wrap break-words text-xs text-on-surface font-mono">
+                      {task.lastResult || "No execution result yet."}
+                    </pre>
                   </div>
                 </div>
               )}
@@ -196,7 +222,9 @@ export function SchedulesTab({
         })}
       </div>
       {tasks.length === 0 && !tasksLoading && (
-        <p className="text-on-surface-variant text-sm">No scheduled tasks. The assistant can create them, or use the form above.</p>
+        <p className="text-on-surface-variant text-sm">
+          No scheduled tasks. The assistant can create them, or use the form above.
+        </p>
       )}
     </div>
   );

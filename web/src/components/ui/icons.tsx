@@ -5,7 +5,12 @@ type IconProps = SVGProps<SVGSVGElement>;
 export function ChatIcon(props: IconProps) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0" {...props}>
-      <path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H5l-3 3V3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path
+        d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H5l-3 3V3z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -33,7 +38,13 @@ export function ToolIcon(props: IconProps) {
 export function LogoutIcon(props: IconProps) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0" {...props}>
-      <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10.5 11.5L14 8l-3.5-3.5M14 8H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10.5 11.5L14 8l-3.5-3.5M14 8H6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -41,7 +52,15 @@ export function LogoutIcon(props: IconProps) {
 export function OverviewIcon(props: IconProps) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0" {...props}>
-      <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
+      <rect
+        x="1.5"
+        y="1.5"
+        width="5.5"
+        height="5.5"
+        rx="1"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
       <rect x="9" y="1.5" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
       <rect x="1.5" y="9" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
       <rect x="9" y="9" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
@@ -53,7 +72,13 @@ export function TerminalIcon(props: IconProps) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0" {...props}>
       <rect x="1" y="2.5" width="14" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M4 6l2.5 2L4 10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M4 6l2.5 2L4 10"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       <path d="M9 10h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );

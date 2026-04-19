@@ -4,7 +4,8 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Spinner } from "./Spinner";
 
 const variants = {
-  primary: "bg-violet text-white hover:shadow-[0_4px_20px_color-mix(in_srgb,var(--color-violet)_50%,transparent),0_2px_8px_color-mix(in_srgb,var(--color-violet)_30%,transparent)]",
+  primary:
+    "bg-violet text-white hover:shadow-[0_4px_20px_color-mix(in_srgb,var(--color-violet)_50%,transparent),0_2px_8px_color-mix(in_srgb,var(--color-violet)_30%,transparent)]",
   secondary: "bg-surface-highest text-violet-light hover:bg-surface-high",
   ghost: "bg-transparent hover:bg-surface-high text-on-surface",
   danger: "bg-red-500/10 hover:bg-red-500/20 text-red-400",
@@ -24,8 +25,16 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "primary", size = "md", loading = false, disabled, children, className = "", ...rest },
-  ref
+  {
+    variant = "primary",
+    size = "md",
+    loading = false,
+    disabled,
+    children,
+    className = "",
+    ...rest
+  },
+  ref,
 ) {
   return (
     <button

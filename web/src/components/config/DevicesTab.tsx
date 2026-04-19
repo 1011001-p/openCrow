@@ -18,7 +18,15 @@ function QRModal({ payload, onClose }: { payload: string; onClose: () => void })
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-medium text-on-surface">Pair Companion App</h3>
           <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface p-1">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
@@ -30,7 +38,9 @@ function QRModal({ payload, onClose }: { payload: string; onClose: () => void })
           <p className="text-sm text-center text-on-surface-variant">
             Scan this QR code from the Companion App to securely pair it to your openCrow server.
           </p>
-          <Button variant="secondary" className="w-full" onClick={onClose}>Done</Button>
+          <Button variant="secondary" className="w-full" onClick={onClose}>
+            Done
+          </Button>
         </div>
       </div>
     </div>
@@ -86,13 +96,23 @@ function CompanionAppCard({
         <Input
           label="Display Name"
           value={app.label ?? ""}
-          onChange={(e) => updateConfig((c) => { c.integrations.companionApps[i].label = e.target.value; return c; })}
+          onChange={(e) =>
+            updateConfig((c) => {
+              c.integrations.companionApps[i].label = e.target.value;
+              return c;
+            })
+          }
           placeholder="e.g. Pixel 8 Pro"
         />
         <Input
           label="Identifier"
           value={app.name}
-          onChange={(e) => updateConfig((c) => { c.integrations.companionApps[i].name = e.target.value; return c; })}
+          onChange={(e) =>
+            updateConfig((c) => {
+              c.integrations.companionApps[i].name = e.target.value;
+              return c;
+            })
+          }
           placeholder="e.g. pixel8"
         />
       </div>
@@ -114,9 +134,16 @@ function CompanionAppCard({
         <Toggle
           label="Enabled"
           checked={app.enabled}
-          onChange={(v) => updateConfig((c) => { c.integrations.companionApps[i].enabled = v; return c; })}
+          onChange={(v) =>
+            updateConfig((c) => {
+              c.integrations.companionApps[i].enabled = v;
+              return c;
+            })
+          }
         />
-        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isOnline ? "bg-green-500/15 text-green-400" : "bg-white/5 text-on-surface-variant"}`}>
+        <span
+          className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isOnline ? "bg-green-500/15 text-green-400" : "bg-white/5 text-on-surface-variant"}`}
+        >
           {isOnline ? "online" : "offline"}
         </span>
         <span className="text-xs text-on-surface-variant font-mono px-2 py-1 bg-white/5 rounded">
@@ -129,7 +156,12 @@ function CompanionAppCard({
           variant="ghost"
           size="sm"
           className="ml-auto hover:text-error"
-          onClick={() => updateConfig((c) => { c.integrations.companionApps.splice(i, 1); return c; })}
+          onClick={() =>
+            updateConfig((c) => {
+              c.integrations.companionApps.splice(i, 1);
+              return c;
+            })
+          }
         >
           Remove
         </Button>
@@ -200,7 +232,10 @@ export function DevicesTab({
     if (!newTaskTarget || !newTaskInstruction) return;
     setAddingTask(true);
     try {
-      await endpoints.createDeviceTask({ targetDevice: newTaskTarget, instruction: newTaskInstruction });
+      await endpoints.createDeviceTask({
+        targetDevice: newTaskTarget,
+        instruction: newTaskInstruction,
+      });
       setNewTaskInstruction("");
       await fetchTasks();
     } catch (e) {
@@ -287,12 +322,24 @@ export function DevicesTab({
         </div>
 
         {companionApps.map((app, i) => (
-          <CompanionAppCard key={app.id || i} app={app} index={i} registration={app.id ? registrations[app.id] : undefined} serverUrl={serverUrl} updateConfig={updateConfig} />
+          <CompanionAppCard
+            key={app.id || i}
+            app={app}
+            index={i}
+            registration={app.id ? registrations[app.id] : undefined}
+            serverUrl={serverUrl}
+            updateConfig={updateConfig}
+          />
         ))}
         {!companionApps.length && (
           <p className="text-on-surface-variant text-sm">No companion apps configured.</p>
         )}
-        <SaveBar onClick={saveFullConfig} loading={saving} label="Save Device Config" status={saveStatus} />
+        <SaveBar
+          onClick={saveFullConfig}
+          loading={saving}
+          label="Save Device Config"
+          status={saveStatus}
+        />
       </div>
 
       <div className="h-px bg-white/10" />
@@ -358,9 +405,12 @@ export function DevicesTab({
           ) : (
             tasks.map((task) => {
               const device = companionApps.find((a) => (a.id ?? a.name) === task.targetDevice);
-              const deviceLabel = device ? (device.label || device.name) : task.targetDevice;
+              const deviceLabel = device ? device.label || device.name : task.targetDevice;
               return (
-                <div key={task.id} className="flex flex-col gap-2 p-3 rounded-lg bg-surface-mid border border-white/5 text-sm">
+                <div
+                  key={task.id}
+                  className="flex flex-col gap-2 p-3 rounded-lg bg-surface-mid border border-white/5 text-sm"
+                >
                   <div className="flex justify-between items-start">
                     <div className="flex gap-2 items-center">
                       <span className="font-mono text-cyan bg-cyan/10 px-1.5 py-0.5 rounded text-xs">
@@ -371,8 +421,8 @@ export function DevicesTab({
                           task.status === "pending"
                             ? "bg-warning/10 text-warning"
                             : task.status === "processing"
-                            ? "bg-violet/10 text-violet"
-                            : "bg-cyan/10 text-cyan"
+                              ? "bg-violet/10 text-violet"
+                              : "bg-cyan/10 text-cyan"
                         }`}
                       >
                         {task.status}
@@ -382,7 +432,14 @@ export function DevicesTab({
                       onClick={() => handleDeleteTask(task.id)}
                       className="text-on-surface-variant hover:text-error transition-colors"
                     >
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
                         <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" />
                       </svg>
                     </button>
@@ -403,8 +460,19 @@ export function DevicesTab({
           <div className="bg-surface-high border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col gap-6">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium text-on-surface">Pair Companion App</h3>
-              <button onClick={closeAddDevice} className="text-on-surface-variant hover:text-on-surface p-1">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <button
+                onClick={closeAddDevice}
+                className="text-on-surface-variant hover:text-on-surface p-1"
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
@@ -444,7 +512,8 @@ export function DevicesTab({
                   <QRCode value={qrPayload} size={200} />
                 </div>
                 <p className="text-sm text-center text-on-surface-variant">
-                  Scan this QR code from the Companion App to securely pair it to your openCrow server.
+                  Scan this QR code from the Companion App to securely pair it to your openCrow
+                  server.
                 </p>
                 <Button variant="secondary" className="w-full" onClick={closeAddDevice}>
                   Done

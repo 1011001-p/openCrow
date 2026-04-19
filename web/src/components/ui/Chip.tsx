@@ -10,7 +10,9 @@ interface ChipProps {
 
 export function Chip({ children, onRemove, className = "" }: ChipProps) {
   return (
-    <span className={`inline-flex items-center gap-1 bg-surface-highest text-on-surface-variant text-xs px-2 py-0.5 rounded-sm ${className}`}>
+    <span
+      className={`inline-flex items-center gap-1 bg-surface-highest text-on-surface-variant text-xs px-2 py-0.5 rounded-sm ${className}`}
+    >
       {children}
       {onRemove && (
         <button

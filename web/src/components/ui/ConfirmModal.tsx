@@ -41,10 +41,7 @@ export function ConfirmModal({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      onClick={onCancel}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onCancel}>
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
@@ -54,18 +51,12 @@ export function ConfirmModal({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-base font-semibold text-on-surface">{title}</h2>
-        {message && (
-          <p className="text-sm text-on-surface-variant">{message}</p>
-        )}
+        {message && <p className="text-sm text-on-surface-variant">{message}</p>}
         <div className="flex justify-end gap-3 pt-2">
           <Button ref={cancelRef} variant="ghost" size="sm" onClick={onCancel}>
             {cancelLabel}
           </Button>
-          <Button
-            variant={danger ? "danger" : "primary"}
-            size="sm"
-            onClick={onConfirm}
-          >
+          <Button variant={danger ? "danger" : "primary"} size="sm" onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </div>

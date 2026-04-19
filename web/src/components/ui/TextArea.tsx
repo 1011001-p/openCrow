@@ -25,7 +25,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
         {error && <span className="text-error text-xs">{error}</span>}
       </div>
     );
-  }
+  },
 );
 
 TextArea.displayName = "TextArea";

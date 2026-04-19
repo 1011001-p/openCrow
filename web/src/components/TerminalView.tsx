@@ -142,7 +142,8 @@ export default function TerminalView() {
     connectTerminal();
 
     return () => {
-      genRef.current++;  // invalidate any in-flight connectTerminal
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      genRef.current++; // intentional: increments the shared counter to cancel in-flight connects
       wsRef.current?.close();
       xtermRef.current?.dispose();
       wsRef.current = null;
@@ -158,7 +159,9 @@ export default function TerminalView() {
       if (fitAddonRef.current && xtermRef.current) {
         try {
           fitAddonRef.current.fit();
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     });
     obs.observe(termContainerRef.current);
