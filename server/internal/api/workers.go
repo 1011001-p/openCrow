@@ -76,7 +76,7 @@ func (s *Server) runOrchestratorForUser(ctx context.Context, workerName, userID,
 	}
 
 	// Build providers sorted by Priority (ascending = highest priority first)
-	providers := buildProvidersFromConfig(cfg)
+	providers := buildProvidersFromConfig(ctx, cfg)
 	providerNames := make([]string, 0, len(providers))
 	for _, provider := range providers {
 		providerNames = append(providerNames, provider.Name())
@@ -136,7 +136,7 @@ func (s *Server) runOrchestratorForUserWithHistory(ctx context.Context, workerNa
 		}
 	}
 
-	providers := buildProvidersFromConfig(cfg)
+	providers := buildProvidersFromConfig(ctx, cfg)
 	svc := s.orchestrator
 	if len(providers) > 0 {
 		svc = orchestrator.NewService(providers, orchestrator.ToolLoopGuard{})

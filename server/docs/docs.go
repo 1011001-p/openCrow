@@ -3343,6 +3343,12 @@ const docTemplate = `{
         "api.CompleteRequest": {
             "type": "object",
             "properties": {
+                "attachments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/api.CreateMessageAttachmentRequest"
+                    }
+                },
                 "conversationId": {
                     "type": "string"
                 },

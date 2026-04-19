@@ -230,7 +230,7 @@ func (s *Server) buildSystemPrompt(ctx context.Context, userID string, cfg *conf
 // buildProvidersFromConfig returns an ordered list of orchestrator providers from
 // the user's LLM config, sorted by Priority ascending (0 = highest priority).
 // Only enabled providers with a valid kind are included.
-func buildProvidersFromConfig(cfg *configstore.UserConfig) []orchestrator.Provider {
+func buildProvidersFromConfig(ctx context.Context, cfg *configstore.UserConfig) []orchestrator.Provider {
 	if cfg == nil {
 		return nil
 	}
@@ -244,7 +244,12 @@ func buildProvidersFromConfig(cfg *configstore.UserConfig) []orchestrator.Provid
 		if !p.Enabled {
 			continue
 		}
-		prov := orchestrator.BuildProvider(p.Name, p.Kind, p.BaseURL, p.APIKeyRef, p.Model)
+		prov, err := orchestrator.BuildProvider(ctx, p.Name, p.Kind, p.BaseURL, p.APIKeyRef, p.Model)
+		if err != nil {
+			// Log but don't abort — remaining providers may still work.
+			fmt.Printf("provider %q (%s): init error: %v\n", p.Name, p.Kind, err)
+			continue
+		}
 		if prov != nil {
 			providers = append(providers, prov)
 		}

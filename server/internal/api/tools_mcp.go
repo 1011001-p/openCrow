@@ -220,6 +220,81 @@ func (s *Server) toolRemoveMCPServer(ctx context.Context, userID string, args ma
 	}, nil
 }
 
+func (s *Server) toolDiscoverMCPTools(ctx context.Context, userID string, args map[string]any) (map[string]any, error) {
+	serverName := strings.TrimSpace(fmt.Sprint(args["server"]))
+	if serverName == "" {
+		return map[string]any{"success": false, "error": "server name is required"}, nil
+	}
+	servers, err := s.loadMCPServersForUser(ctx, userID)
+	if err != nil {
+		return map[string]any{"success": false, "error": err.Error()}, nil
+	}
+	var target *configstore.MCPServerConfig
+	for i := range servers {
+		if strings.EqualFold(strings.TrimSpace(servers[i].Name), serverName) {
+			target = &servers[i]
+			break
+		}
+	}
+	if target == nil {
+		return map[string]any{"success": false, "error": fmt.Sprintf("MCP server %q not found", serverName)}, nil
+	}
+	if !target.Enabled || strings.TrimSpace(target.URL) == "" {
+		return map[string]any{"success": false, "error": "MCP server is disabled or has no URL"}, nil
+	}
+	discoverCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	tools, err := fetchMCPTools(discoverCtx, strings.TrimSpace(target.URL), target.Headers)
+	cancel()
+	if err != nil {
+		return map[string]any{"success": false, "error": err.Error()}, nil
+	}
+	items := make([]map[string]any, 0, len(tools))
+	for _, t := range tools {
+		items = append(items, map[string]any{
+			"name":        t.Name,
+			"description": t.Description,
+			"inputSchema": t.InputSchema,
+		})
+	}
+	return map[string]any{"success": true, "server": serverName, "tools": items, "count": len(items)}, nil
+}
+
+func (s *Server) toolUseMCPTool(ctx context.Context, userID string, args map[string]any) (map[string]any, error) {
+	serverName := strings.TrimSpace(fmt.Sprint(args["server"]))
+	toolName := strings.TrimSpace(fmt.Sprint(args["tool"]))
+	if serverName == "" || toolName == "" {
+		return map[string]any{"success": false, "error": "server and tool are required"}, nil
+	}
+	toolArgs := map[string]any{}
+	if a, ok := args["arguments"].(map[string]any); ok {
+		toolArgs = a
+	}
+	servers, err := s.loadMCPServersForUser(ctx, userID)
+	if err != nil {
+		return map[string]any{"success": false, "error": err.Error()}, nil
+	}
+	var target *configstore.MCPServerConfig
+	for i := range servers {
+		if strings.EqualFold(strings.TrimSpace(servers[i].Name), serverName) {
+			target = &servers[i]
+			break
+		}
+	}
+	if target == nil {
+		return map[string]any{"success": false, "error": fmt.Sprintf("MCP server %q not found", serverName)}, nil
+	}
+	if !target.Enabled || strings.TrimSpace(target.URL) == "" {
+		return map[string]any{"success": false, "error": "MCP server is disabled or has no URL"}, nil
+	}
+	callCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	result, err := callMCPToolOnServer(callCtx, strings.TrimSpace(target.URL), target.Headers, toolName, toolArgs)
+	cancel()
+	if err != nil {
+		return map[string]any{"success": false, "error": err.Error(), "server": serverName, "tool": toolName}, nil
+	}
+	return map[string]any{"success": true, "server": serverName, "tool": toolName, "result": result}, nil
+}
+
 func (s *Server) toolCallMCPTool(ctx context.Context, userID, toolName string, args map[string]any) (map[string]any, bool) {
 	servers, err := s.loadMCPServersForUser(ctx, userID)
 	if err != nil || len(servers) == 0 {

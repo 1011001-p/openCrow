@@ -40,6 +40,8 @@ export const PROVIDER_KINDS = [
   { value: "anthropic", label: "Anthropic" },
   { value: "ollama", label: "Ollama" },
   { value: "openrouter", label: "OpenRouter" },
+  { value: "deepseek", label: "DeepSeek" },
+  { value: "litellm", label: "LiteLLM" },
   { value: "custom", label: "Custom (OpenAI-compatible)" },
 ];
 

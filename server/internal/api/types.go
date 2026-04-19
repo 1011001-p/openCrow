@@ -153,10 +153,11 @@ type UpdateSettingsRequest struct {
 }
 
 type CompleteRequest struct {
-	ConversationID string   `json:"conversationId"`
-	Message        string   `json:"message"`
-	ProviderOrder  []string `json:"providerOrder,omitempty"`
-	MaxRetries     int      `json:"maxRetries,omitempty"`
+	ConversationID string                           `json:"conversationId"`
+	Message        string                           `json:"message"`
+	Attachments    []CreateMessageAttachmentRequest `json:"attachments,omitempty"`
+	ProviderOrder  []string                         `json:"providerOrder,omitempty"`
+	MaxRetries     int                              `json:"maxRetries,omitempty"`
 }
 
 type CompleteResponse struct {

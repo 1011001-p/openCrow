@@ -69,7 +69,7 @@ func (s *Server) handleOrchestratorComplete(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Save the user message
-	if _, err := s.createMessage(ctx, userID, req.ConversationID, "user", message, nil); err != nil {
+	if _, err := s.createMessage(ctx, userID, req.ConversationID, "user", message, req.Attachments); err != nil {
 		writeError(w, http.StatusInternalServerError, "unable to save user message")
 		return
 	}
@@ -78,14 +78,16 @@ func (s *Server) handleOrchestratorComplete(w http.ResponseWriter, r *http.Reque
 	chatMsgs := make([]orchestrator.ChatMessage, 0, len(history)+1)
 	for _, msg := range history {
 		chatMsgs = append(chatMsgs, orchestrator.ChatMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
+			Role:        msg.Role,
+			Content:     msg.Content,
+			Attachments: dtoAttachmentsToOrch(msg.Attachments),
 		})
 	}
-	chatMsgs = append(chatMsgs, orchestrator.ChatMessage{Role: "user", Content: message})
+	userMsg := orchestrator.ChatMessage{Role: "user", Content: message, Attachments: reqAttachmentsToOrch(req.Attachments)}
+	chatMsgs = append(chatMsgs, userMsg)
 
 	// Build providers from user config (sorted by Priority)
-	providers := buildProvidersFromConfig(cfg)
+	providers := buildProvidersFromConfig(ctx, cfg)
 	svc := s.orchestrator
 	if len(providers) > 0 {
 		svc = orchestrator.NewService(providers, orchestrator.ToolLoopGuard{})
@@ -232,17 +234,17 @@ func (s *Server) handleOrchestratorStream(w http.ResponseWriter, r *http.Request
 
 	chatMsgs := make([]orchestrator.ChatMessage, 0, len(history)+1)
 	for _, msg := range history {
-		chatMsgs = append(chatMsgs, orchestrator.ChatMessage{Role: msg.Role, Content: msg.Content})
+		chatMsgs = append(chatMsgs, orchestrator.ChatMessage{Role: msg.Role, Content: msg.Content, Attachments: dtoAttachmentsToOrch(msg.Attachments)})
 	}
 	// Append current user message (already saved by client via POST /messages)
-	chatMsgs = append(chatMsgs, orchestrator.ChatMessage{Role: "user", Content: message})
+	chatMsgs = append(chatMsgs, orchestrator.ChatMessage{Role: "user", Content: message, Attachments: reqAttachmentsToOrch(req.Attachments)})
 	chatMsgs = orchestrator.TrimMessages(chatMsgs, 20)
 
 	// Pick first enabled streaming provider.
 	// When tools are configured, prefer the full tool-loop path (non-streaming)
 	// so that tool execution round-trips work correctly.
 	// Providers are sorted by Priority (ascending = highest priority first).
-	sortedProviders := buildProvidersFromConfig(cfg)
+	sortedProviders := buildProvidersFromConfig(ctx, cfg)
 	var streamProv orchestrator.StreamingProvider
 	var fallbackProviders []orchestrator.Provider
 	for _, prov := range sortedProviders {
@@ -400,6 +402,30 @@ func (s *Server) handleOrchestratorStream(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// dtoAttachmentsToOrch converts MessageAttachmentDTO slice to orchestrator.MessageAttachment slice.
+func dtoAttachmentsToOrch(dtos []MessageAttachmentDTO) []orchestrator.MessageAttachment {
+	if len(dtos) == 0 {
+		return nil
+	}
+	out := make([]orchestrator.MessageAttachment, len(dtos))
+	for i, a := range dtos {
+		out[i] = orchestrator.MessageAttachment{FileName: a.FileName, MimeType: a.MimeType, DataURL: a.DataURL}
+	}
+	return out
+}
+
+// reqAttachmentsToOrch converts CreateMessageAttachmentRequest slice to orchestrator.MessageAttachment slice.
+func reqAttachmentsToOrch(reqs []CreateMessageAttachmentRequest) []orchestrator.MessageAttachment {
+	if len(reqs) == 0 {
+		return nil
+	}
+	out := make([]orchestrator.MessageAttachment, len(reqs))
+	for i, a := range reqs {
+		out[i] = orchestrator.MessageAttachment{FileName: a.FileName, MimeType: a.MimeType, DataURL: a.DataURL}
+	}
+	return out
+}
+
 // @Summary Get the last realtime event for the current user
 // @Tags    orchestrator
 // @Security BearerAuth
@@ -485,7 +511,7 @@ func (s *Server) handleRegenerateMessage(w http.ResponseWriter, r *http.Request)
 	toolSpecs := s.buildEnabledToolSpecs(ctx, cfg)
 
 	// Pick streaming provider (sorted by Priority, ascending = highest priority first)
-	sortedProviders2 := buildProvidersFromConfig(cfg)
+	sortedProviders2 := buildProvidersFromConfig(ctx, cfg)
 	var streamProv orchestrator.StreamingProvider
 	var fallbackProviders []orchestrator.Provider
 	for _, prov := range sortedProviders2 {
@@ -652,48 +678,6 @@ func (s *Server) buildEnabledToolSpecs(ctx context.Context, cfg *configstore.Use
 			},
 		})
 		seen[name] = struct{}{}
-	}
-
-	for _, srv := range cfg.MCP.Servers {
-		if !srv.Enabled || strings.TrimSpace(srv.URL) == "" {
-			continue
-		}
-		mcpCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		discovered, derr := fetchMCPTools(mcpCtx, strings.TrimSpace(srv.URL), srv.Headers)
-		cancel()
-		if derr != nil {
-			log.Printf("warn: unable to discover mcp tools for %s: %v", strings.TrimSpace(srv.URL), derr)
-			continue
-		}
-		for _, mt := range discovered {
-			name := sanitizeToolName(mt.Name)
-			if name == "" {
-				continue
-			}
-			if _, exists := seen[name]; exists {
-				continue
-			}
-			desc := strings.TrimSpace(mt.Description)
-			if desc == "" {
-				desc = "MCP tool"
-			}
-			params := map[string]any{}
-			for k, v := range mt.InputSchema {
-				params[k] = v
-			}
-			if _, ok := params["type"]; !ok {
-				params["type"] = "object"
-			}
-			if _, ok := params["properties"]; !ok {
-				params["properties"] = map[string]any{}
-			}
-			toolSpecs = append(toolSpecs, orchestrator.ToolSpec{
-				Name:        name,
-				Description: fmt.Sprintf("[MCP:%s] %s", strings.TrimSpace(srv.Name), desc),
-				Parameters:  params,
-			})
-			seen[name] = struct{}{}
-		}
 	}
 
 	return toolSpecs

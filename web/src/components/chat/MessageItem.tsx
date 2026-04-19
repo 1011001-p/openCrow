@@ -1,7 +1,7 @@
 import { formatTime, isUuid } from "./helpers";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { formatAttachmentSize } from "./attachments";
-import { FileIcon } from "@/components/ui/icons";
+import { FileIcon, CopyIcon, RegenIcon } from "@/components/ui/icons";
 import type { MessageDTO } from "@/lib/api";
 
 type MessageItemProps = {
@@ -57,10 +57,17 @@ export function MessageItem({
         </p>
         <div className="text-sm text-on-surface font-body break-words">
           {msg.role === "assistant" && msg.id === streamingMsgId && msg.content === "" ? (
-            <div className="space-y-2 py-0.5">
-              <div className="h-3 rounded bg-on-surface-variant/15 animate-pulse w-3/4" />
-              <div className="h-3 rounded bg-on-surface-variant/10 animate-pulse w-1/2" />
-              <div className="h-3 rounded bg-on-surface-variant/8 animate-pulse w-2/3" />
+            <div className="flex items-center gap-2 py-0.5">
+              {[3, 1.5, 2].map((w, i) => (
+                <div
+                  key={i}
+                  className="h-[1em] rounded bg-on-surface-variant/20 animate-pulse"
+                  style={{
+                    width: `${w}rem`,
+                    animationDelay: `${i * 150}ms`,
+                  }}
+                />
+              ))}
             </div>
           ) : msg.role === "assistant" ? (
             <MarkdownMessage content={msg.content} />
@@ -102,22 +109,23 @@ export function MessageItem({
           )}
         </div>
         {!isUser && (
-          <div className="flex items-center justify-end gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center justify-end gap-0.5 mt-2">
             <button
-              onClick={() => onCopy(msg.id, msg.content)}
-              className="text-xs text-on-surface-variant hover:text-on-surface px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors font-mono"
+              onClick={() => msg.content && onCopy(msg.id, msg.content)}
+              disabled={!msg.content}
+              className="flex items-center gap-1 text-xs text-on-surface-variant hover:text-on-surface px-1.5 py-0.5 rounded hover:cursor-pointer transition-colors font-mono disabled:opacity-30 disabled:cursor-default"
               title="Copy"
             >
-              {copiedId === msg.id ? "copied" : "copy"}
+              {copiedId === msg.id ? <span className="text-[10px]">copied</span> : <CopyIcon />}
             </button>
             {canRegenerate && (
               <button
                 onClick={() => onRegenerate(msg.id)}
-                disabled={!!regeneratingId}
-                className="text-xs text-on-surface-variant hover:text-cyan px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors font-mono disabled:opacity-40"
+                disabled={!!regeneratingId || !msg.content}
+                className="flex items-center gap-1 text-xs text-on-surface-variant hover:text-cyan px-1.5 py-0.5 rounded hover:cursor-pointer transition-colors font-mono disabled:opacity-30 disabled:cursor-default"
                 title="Regenerate"
               >
-                {regeneratingId === msg.id ? "..." : "↺ regen"}
+                <RegenIcon className={regeneratingId === msg.id ? "animate-spin" : ""} />
               </button>
             )}
           </div>

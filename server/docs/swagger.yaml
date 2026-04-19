@@ -15,6 +15,10 @@ definitions:
     type: object
   api.CompleteRequest:
     properties:
+      attachments:
+        items:
+          $ref: '#/definitions/api.CreateMessageAttachmentRequest'
+        type: array
       conversationId:
         type: string
       maxRetries:

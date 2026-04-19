@@ -105,9 +105,9 @@ export function ProviderCard({
         : ("error" as const);
 
   return (
-    <div className="rounded-xl border border-outline-ghost bg-surface-low overflow-hidden">
+    <div className="rounded-lg border border-white/10 bg-surface-mid overflow-hidden">
       <button
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surface-mid/40 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
         onClick={() => setExpanded((e) => !e)}
       >
         <AnimatedDot status={statusDotStatus} />
@@ -142,7 +142,7 @@ export function ProviderCard({
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 space-y-4 border-t border-outline-ghost pt-4">
+        <div className="px-4 pb-4 space-y-4 border-t border-white/10 pt-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select
               label="Kind"
@@ -161,6 +161,27 @@ export function ProviderCard({
               onChange={(e) =>
                 updateConfig((c) => {
                   c.llm.providers[i].name = e.target.value;
+                  return c;
+                })
+              }
+            />
+            <Input
+              label="Base URL"
+              value={prov.baseUrl}
+              onChange={(e) =>
+                updateConfig((c) => {
+                  c.llm.providers[i].baseUrl = e.target.value;
+                  return c;
+                })
+              }
+            />
+            <Input
+              label="API Key"
+              type="password"
+              value={prov.apiKeyRef}
+              onChange={(e) =>
+                updateConfig((c) => {
+                  c.llm.providers[i].apiKeyRef = e.target.value;
                   return c;
                 })
               }
@@ -197,7 +218,12 @@ export function ProviderCard({
                     size="sm"
                     loading={probingModels}
                     onClick={handleProbeModels}
-                    disabled={!prov.kind}
+                    disabled={!prov.baseUrl || !prov.apiKeyRef}
+                    title={
+                      !prov.baseUrl || !prov.apiKeyRef
+                        ? "Set Base URL and API Key first"
+                        : undefined
+                    }
                   >
                     Probe models
                   </Button>
@@ -224,27 +250,6 @@ export function ProviderCard({
                 }
               />
             )}
-            <Input
-              label="Base URL"
-              value={prov.baseUrl}
-              onChange={(e) =>
-                updateConfig((c) => {
-                  c.llm.providers[i].baseUrl = e.target.value;
-                  return c;
-                })
-              }
-            />
-            <Input
-              label="API Key"
-              type="password"
-              value={prov.apiKeyRef}
-              onChange={(e) =>
-                updateConfig((c) => {
-                  c.llm.providers[i].apiKeyRef = e.target.value;
-                  return c;
-                })
-              }
-            />
           </div>
 
           {testResult && (

@@ -434,11 +434,16 @@ export default function ChatShell({
                     )}
                   </button>
                 </div>
-                {lastUsage && (
-                  <div className="flex justify-end px-1 pt-0.5">
-                    <span className="text-xs text-on-surface-variant font-mono opacity-60">
-                      ^{lastUsage.promptTokens} v{lastUsage.completionTokens} Σ
-                      {lastUsage.totalTokens}
+                {lastUsage && lastUsage.totalTokens > 0 && (
+                  <div className="flex items-center justify-end gap-3 px-1 pt-1">
+                    <span className="text-[10px] text-on-surface-variant/50 font-mono tabular-nums">
+                      in&nbsp;{lastUsage.promptTokens.toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-on-surface-variant/50 font-mono tabular-nums">
+                      out&nbsp;{lastUsage.completionTokens.toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-on-surface-variant/40 font-mono tabular-nums">
+                      {lastUsage.totalTokens.toLocaleString()}&nbsp;tok
                     </span>
                   </div>
                 )}

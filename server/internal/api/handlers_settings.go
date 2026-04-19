@@ -191,14 +191,18 @@ func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prov := orchestrator.BuildProvider(req.Name, req.Kind, req.BaseURL, req.APIKey, req.Model)
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	prov, provErr := orchestrator.BuildProvider(ctx, req.Name, req.Kind, req.BaseURL, req.APIKey, req.Model)
+	if provErr != nil {
+		writeJSON(w, http.StatusOK, ProviderTestResult{OK: false, Error: provErr.Error()})
+		return
+	}
 	if prov == nil {
 		writeJSON(w, http.StatusOK, ProviderTestResult{OK: false, Error: "unknown provider kind: " + req.Kind})
 		return
 	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer cancel()
 
 	start := time.Now()
 	_, _, _, err := prov.Chat(ctx, "", []orchestrator.ChatMessage{{Role: "user", Content: "Respond with exactly: OK"}}, nil)
@@ -391,8 +395,10 @@ func (s *Server) handleProvidersStatus(w http.ResponseWriter, r *http.Request) {
 			Enabled: p.Enabled,
 		}
 		if p.Enabled {
-			prov := orchestrator.BuildProvider(p.Name, p.Kind, p.BaseURL, p.APIKeyRef, p.Model)
-			if prov == nil {
+			prov, provErr := orchestrator.BuildProvider(ctx, p.Name, p.Kind, p.BaseURL, p.APIKeyRef, p.Model)
+			if provErr != nil {
+				entry.Error = provErr.Error()
+			} else if prov == nil {
 				entry.Error = "unknown provider kind"
 			} else {
 				start := time.Now()

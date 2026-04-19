@@ -38,7 +38,6 @@ export function SchedulesTab({
     cronExpression: "",
   });
   const [creating, setCreating] = useState(false);
-  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
   const handleCreate = async () => {
     if (!newTask.prompt || !newTask.executeAt) return;
@@ -146,77 +145,34 @@ export function SchedulesTab({
           return (
             <div
               key={task.id}
-              className="rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm px-4 py-3 flex flex-col gap-3"
+              className="rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm px-4 py-3 flex items-start gap-3"
             >
-              <div className="flex items-start gap-3">
-                <button
-                  type="button"
-                  onClick={() => setExpandedTaskId((prev) => (prev === task.id ? null : task.id))}
-                  className="flex-1 min-w-0 text-left space-y-1"
-                >
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-on-surface truncate">
-                      {task.description || task.prompt.slice(0, 60)}
-                    </span>
-                    <span className={`text-xs font-mono ${statusColor}`}>{task.status}</span>
-                    {task.consecutiveFailures > 0 && (
-                      <span className="text-xs text-error">
-                        {task.consecutiveFailures} failure
-                        {task.consecutiveFailures !== 1 ? "s" : ""}
-                      </span>
-                    )}
-                    <span className="ml-auto text-on-surface-variant text-xs">
-                      {expandedTaskId === task.id ? "▲" : "▼"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-on-surface-variant">
-                    <span>{formatDate(task.executeAt)}</span>
-                    {task.cronExpression && (
-                      <span>
-                        <code className="font-mono text-cyan">{task.cronExpression}</code>
-                        {cronDesc && (
-                          <span className="ml-1 text-on-surface-variant/70">-- {cronDesc}</span>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-on-surface-variant/60 font-mono truncate">
-                    {task.prompt}
-                  </p>
-                  {task.lastResult && (
-                    <p className="text-xs text-on-surface-variant/70 truncate">
-                      ↳ {task.lastResult.split("\n")[0]}
-                    </p>
-                  )}
-                </button>
-                <button
-                  onClick={() => handleDelete(task.id)}
-                  className="text-xs text-on-surface-variant/50 hover:text-error transition-colors shrink-0 self-start"
-                  title="Delete task"
-                >
-                  ✕
-                </button>
-              </div>
-              {expandedTaskId === task.id && (
-                <div className="rounded-md border border-outline-ghost bg-surface-low px-3 py-3 space-y-3">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wider text-on-surface-variant font-mono mb-1">
-                      Prompt
-                    </p>
-                    <pre className="whitespace-pre-wrap break-words text-xs text-on-surface font-mono">
-                      {task.prompt}
-                    </pre>
-                  </div>
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wider text-on-surface-variant font-mono mb-1">
-                      Last execution result
-                    </p>
-                    <pre className="whitespace-pre-wrap break-words text-xs text-on-surface font-mono">
-                      {task.lastResult || "No execution result yet."}
-                    </pre>
-                  </div>
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-on-surface truncate">
+                    {task.description || task.prompt.slice(0, 60)}
+                  </span>
+                  <span className={`text-xs font-mono ${statusColor}`}>{task.status}</span>
                 </div>
-              )}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-on-surface-variant">
+                  <span>{formatDate(task.executeAt)}</span>
+                  {task.cronExpression && (
+                    <span>
+                      <code className="font-mono text-cyan">{task.cronExpression}</code>
+                      {cronDesc && (
+                        <span className="ml-1 text-on-surface-variant/70">-- {cronDesc}</span>
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => handleDelete(task.id)}
+                className="text-xs text-on-surface-variant/50 hover:text-error transition-colors shrink-0"
+                title="Delete task"
+              >
+                ✕
+              </button>
             </div>
           );
         })}

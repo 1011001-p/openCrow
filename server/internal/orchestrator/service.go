@@ -393,32 +393,3 @@ func trimMessages(msgs []ChatMessage, maxMessages int) []ChatMessage {
 func (s *Service) defaultProviderOrder() []string {
 	return s.providerOrder
 }
-
-type StubProvider struct {
-	ProviderName string
-}
-
-func (p StubProvider) Name() string { return p.ProviderName }
-
-func (p StubProvider) Chat(ctx context.Context, system string, messages []ChatMessage, tools []ToolSpec) (string, []ToolCall, TokenUsage, error) {
-	select {
-	case <-ctx.Done():
-		return "", nil, TokenUsage{}, ctx.Err()
-	case <-time.After(10 * time.Millisecond):
-	}
-	last := ""
-	if len(messages) > 0 {
-		last = messages[len(messages)-1].Content
-	}
-	return "stub: " + truncate(last, 80), nil, TokenUsage{}, nil
-}
-
-func truncate(input string, max int) string {
-	if len(input) <= max {
-		return input
-	}
-	if max <= 3 {
-		return input[:max]
-	}
-	return input[:max-3] + "..."
-}

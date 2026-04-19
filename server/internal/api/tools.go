@@ -82,7 +82,7 @@ func isBuiltinToolName(name string) bool {
 		"ssh_execute",
 		"transcribe_audio",
 		"list_skills", "get_skill", "create_skill", "delete_skill", "install_skills",
-		"list_mcp_servers", "add_mcp_server", "remove_mcp_server":
+		"list_mcp_servers", "discover_mcp_tools", "use_mcp_tool", "add_mcp_server", "remove_mcp_server":
 		return true
 	default:
 		return false
@@ -277,6 +277,12 @@ func (s *Server) executeTool(ctx context.Context, userID, name string, args map[
 	// ── MCP ───────────────────────────────────────────────────────────
 	case "list_mcp_servers":
 		return s.toolListMCPServers(ctx, userID)
+
+	case "discover_mcp_tools":
+		return s.toolDiscoverMCPTools(ctx, userID, args)
+
+	case "use_mcp_tool":
+		return s.toolUseMCPTool(ctx, userID, args)
 
 	case "add_mcp_server":
 		return s.toolAddMCPServer(ctx, userID, args)

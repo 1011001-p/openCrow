@@ -80,6 +80,7 @@ import type {
   CompleteDeviceTaskRequest,
   DeviceCapability,
   DeviceRegistration,
+  CreateMessageAttachmentRequest,
 } from "./api-types";
 
 let _apiBase = "http://localhost:8080";
@@ -589,9 +590,9 @@ export const endpoints = {
             fullOutput = data.output ?? fullOutput;
             if (data.usage && onUsage) {
               onUsage({
-                promptTokens: data.usage.prompt_tokens ?? 0,
-                completionTokens: data.usage.completion_tokens ?? 0,
-                totalTokens: data.usage.total_tokens ?? 0,
+                promptTokens: data.usage.promptTokens ?? 0,
+                completionTokens: data.usage.completionTokens ?? 0,
+                totalTokens: data.usage.totalTokens ?? 0,
               });
             }
           } else if (eventType === "tool_call" && onToolCall) {
