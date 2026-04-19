@@ -114,7 +114,7 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
   return (
     <div className="h-screen overflow-hidden bg-surface">
       {/* ── Sidebar ── */}
-      <aside className="fixed inset-y-0 left-0 z-40 flex w-[280px] flex-col bg-surface-low">
+      <aside className="fixed inset-y-4 left-4 z-40 flex w-[280px] flex-col overflow-hidden rounded-2xl border border-violet bg-surface-lowest/80 backdrop-blur-2xl shadow-[var(--shadow-float)] animate-in slide-in-from-left-8 fade-in duration-500 ease-out">
         {/* Atmospheric glow */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -left-20 -top-20 h-60 w-60 rounded-full bg-violet/[0.06] blur-3xl" />
@@ -344,7 +344,7 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
       </aside>
 
       {/* ── Main Content ── */}
-      <div className="ml-[280px] flex h-screen flex-col">
+      <div className="ml-[312px] flex h-screen flex-col">
         {activeSection === "chat" ? (
           <ChatShell
             activeConversationId={activeConversationId}

@@ -1,0 +1,341 @@
+import { useState, useEffect, useRef, useCallback, type ChangeEvent, type KeyboardEvent } from "react";
+import { endpoints, type ConversationDTO, type MessageDTO, type ProviderConfig, type ToolCallRecord, type TokenUsage } from "@/lib/api";
+
+export function useChatSession({ activeConversationId, onActiveConversationChange, onConversationsUpdate }: { activeConversationId: string | null; onActiveConversationChange: (id: string | null) => void; onConversationsUpdate: (conversations: ConversationDTO[]) => void; }) {
+  // State
+  const [conversations, setConversations] = useState<ConversationDTO[]>([]);
+  const [messages, setMessages] = useState<MessageDTO[]>([]);
+  const [toolCallHistory, setToolCallHistory] = useState<ToolCallRecord[]>([]);
+  const [expandedToolCalls, setExpandedToolCalls] = useState<Set<string>>(new Set());
+  const [composing, setComposing] = useState("");
+  const [providers, setProviders] = useState<ProviderConfig[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<string>("");
+  const [sending, setSending] = useState(false);
+  const [lastUsage, setLastUsage] = useState<TokenUsage | null>(null);
+  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
+  const [loadingConvs, setLoadingConvs] = useState(true);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<{ file: File; dataUrl: string }[]>([]);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composeRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const skipNextMsgLoad = useRef(false);
+  const conversationsRef = useRef<ConversationDTO[]>([]);
+
+  // Keep ref in sync so handleSend can build the updated list without stale closure
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  // ─── Load conversations on mount ───
+  useEffect(() => {
+    setLoadingConvs(true);
+    endpoints
+      .listConversations()
+      .then((data) => {
+        const list = data ?? [];
+        setConversations(list);
+        onConversationsUpdate(list);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingConvs(false));
+  }, [onConversationsUpdate]);
+
+  // ─── Load messages when active conversation changes ───
+  useEffect(() => {
+    if (!activeConversationId) {
+      setMessages([]);
+      setToolCallHistory([]);
+      composeRef.current?.focus();
+      return;
+    }
+    if (skipNextMsgLoad.current) {
+      skipNextMsgLoad.current = false;
+      return;
+    }
+    setLoadingMsgs(true);
+    Promise.all([
+      endpoints.getMessages(activeConversationId),
+      endpoints.getToolCalls(activeConversationId),
+    ])
+      .then(([msgs, calls]) => {
+        setMessages(msgs ?? []);
+        setToolCallHistory(calls ?? []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        setLoadingMsgs(false);
+        composeRef.current?.focus();
+      });
+  }, [activeConversationId]);
+
+  // ─── Load providers from config ───
+  useEffect(() => {
+    endpoints
+      .getConfig()
+      .then((cfg) => {
+        const enabled = cfg.llm.providers.filter((p) => p.enabled);
+        setProviders(enabled);
+        if (enabled.length > 0) setSelectedProvider(enabled[0].name);
+      })
+      .catch(() => {});
+  }, []);
+
+  // ─── Auto-scroll ───
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // ─── Copy message content ───
+  const handleCopy = useCallback((msgId: string, content: string) => {
+    navigator.clipboard.writeText(content).then(() => {
+      setCopiedId(msgId);
+      setTimeout(() => setCopiedId(null), 3000);
+    });
+  }, []);
+
+  // ─── Regenerate assistant message ───
+  const handleRegenerate = useCallback(async (msgId: string, convId: string) => {
+    if (!convId || regeneratingId) return;
+    const targetMessage = messages.find((m) => m.id === msgId);
+    const regenerateAt = targetMessage ? new Date(targetMessage.createdAt).getTime() : null;
+    setRegeneratingId(msgId);
+    // Replace message content with empty streaming placeholder
+    setMessages((prev) =>
+      prev.map((m) => (m.id === msgId ? { ...m, content: "" } : m))
+    );
+    if (regenerateAt != null) {
+      setToolCallHistory((prev) =>
+        prev.filter((tc) => new Date(tc.createdAt).getTime() < regenerateAt)
+      );
+    }
+    try {
+      await endpoints.regenerateMessage(convId, msgId, (token) => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msgId ? { ...m, content: m.content + token } : m))
+        );
+      });
+      const [msgs, calls] = await Promise.all([
+        endpoints.getMessages(convId),
+        endpoints.getToolCalls(convId),
+      ]);
+      setMessages(msgs ?? []);
+      setToolCallHistory(calls ?? []);
+    } catch (err) {
+      console.error("Regenerate failed:", err);
+      const msgs = await endpoints.getMessages(convId).catch(() => null);
+      if (msgs) setMessages(msgs);
+    } finally {
+      setRegeneratingId(null);
+    }
+  }, [messages, regeneratingId]);
+
+
+  // ─── Send message ───
+  const handleSend = useCallback(async () => {
+    if (!composing.trim() || sending) return;
+    const userContent = composing.trim();
+    // Snapshot and clear attachments
+    const currentAttachments = attachedFiles;
+    setComposing("");
+    setAttachedFiles([]);
+    if (composeRef.current) composeRef.current.style.height = "36px";
+    setSending(true);
+
+    // Build full content (text + images as markdown)
+    const imageMarkdown = currentAttachments
+      .filter((a) => a.file.type.startsWith("image/"))
+      .map((a) => `\n![${a.file.name}](${a.dataUrl})`)
+      .join("");
+    const fullContent = userContent + imageMarkdown;
+
+    let conversationId = activeConversationId;
+    if (!conversationId) {
+      const autoTitle = userContent.slice(0, 48) + (userContent.length > 48 ? "..." : "");
+      try {
+        const conv = await endpoints.createConversation(autoTitle || "New chat");
+        conversationId = conv.id;
+        const updatedList = [conv, ...conversationsRef.current];
+        setConversations(updatedList);
+        onConversationsUpdate(updatedList);
+        onActiveConversationChange(conv.id);
+        skipNextMsgLoad.current = true;
+      } catch {
+        setSending(false);
+        return;
+      }
+    }
+
+    if (!conversationId) {
+      setSending(false);
+      return;
+    }
+
+    // Optimistic user message
+    const optimisticUser: MessageDTO = {
+      id: `temp-${Date.now()}`,
+      conversationId,
+      role: "user",
+      content: fullContent,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimisticUser]);
+
+    try {
+      // Persist user message
+      const savedUser = await endpoints.createMessage(conversationId, "user", fullContent);
+      setMessages((prev) =>
+        prev.map((m) => (m.id === optimisticUser.id ? savedUser : m))
+      );
+
+      const providerOrder = selectedProvider ? [selectedProvider] : undefined;
+
+      // Add a streaming assistant placeholder
+      const streamId = `stream-${Date.now()}`;
+      setStreamingMsgId(streamId);
+      setMessages((prev) => [...prev, {
+        id: streamId,
+        conversationId,
+        role: "assistant",
+        content: "",
+        createdAt: new Date().toISOString(),
+      }]);
+
+      let fullOutput = "";
+      const finalOutput = await endpoints.streamComplete(
+        conversationId,
+        fullContent,
+        (token: string) => {
+          fullOutput += token;
+          setMessages((prev) =>
+            prev.map((m) => m.id === streamId ? { ...m, content: fullOutput } : m)
+          );
+        },
+        providerOrder,
+        (name: string, args: string, kind?: "TOOL" | "MCP") => {
+          // Add optimistic live entry
+          setToolCallHistory((prev) => [
+            ...prev,
+            {
+              id: `live-${Date.now()}-${Math.random()}`,
+              toolName: name,
+              kind: kind ?? "TOOL",
+              arguments: (() => { try { return JSON.parse(args); } catch { return {}; } })(),
+              createdAt: new Date().toISOString(),
+            },
+          ]);
+        },
+        (usage: TokenUsage) => {
+          setLastUsage(usage);
+        },
+      );
+      setStreamingMsgId(null);
+      if (finalOutput && finalOutput !== fullOutput) {
+        setMessages((prev) =>
+          prev.map((m) => m.id === streamId ? { ...m, content: finalOutput } : m)
+        );
+      }
+      // Refresh persisted messages + tool calls from server (replaces optimistic stream IDs)
+      if (conversationId) {
+        Promise.all([
+          endpoints.getMessages(conversationId),
+          endpoints.getToolCalls(conversationId),
+        ]).then(([msgs, calls]) => {
+          setMessages(msgs ?? []);
+          setToolCallHistory(calls ?? []);
+        }).catch(() => {});
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err-${Date.now()}`,
+          conversationId,
+          role: "system",
+          content: "Failed to get a response. Please try again.",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setSending(false);
+      setStreamingMsgId(null);
+      composeRef.current?.focus();
+    }
+  }, [activeConversationId, composing, sending, onActiveConversationChange, onConversationsUpdate]);
+
+  const handleFilesPicked = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAttachedFiles((prev) => [...prev, { file, dataUrl: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
+  }, []);
+
+  const removeAttachment = useCallback((index: number) => {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // ─── Key handler ───
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    },
+    [handleSend]
+  );
+
+  const handleMic = useCallback(async () => {
+    if (transcribing) return;
+
+    if (recording) {
+      // Stop recording
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+        setTranscribing(true);
+        try {
+          const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          const res = await endpoints.transcribeAudio(blob);
+          if (res.transcript) {
+            setComposing((prev) => (prev ? prev + " " + res.transcript : res.transcript));
+            setTimeout(() => composeRef.current?.focus(), 50);
+          }
+        } catch {
+          // silently ignore transcription errors
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+    } catch {
+      // microphone permission denied or unavailable
+    }
+  }, [recording, transcribing]);
+  return { conversations, messages, toolCallHistory, composing, setComposing, providers, selectedProvider, setSelectedProvider, sending, lastUsage, streamingMsgId, loadingConvs, loadingMsgs, attachedFiles, setAttachedFiles, regeneratingId, copiedId, recording, transcribing, messagesEndRef, composeRef, fileInputRef, handleSend, handleRegenerate, handleCopy, handleMic, handleFilesPicked, removeAttachment };
+}

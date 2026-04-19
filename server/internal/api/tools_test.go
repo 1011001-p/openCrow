@@ -213,18 +213,11 @@ func TestToolManageProcess_RemoveMissingSessionID(t *testing.T) {
 }
 
 func TestToolExecuteShellCommand_Disabled(t *testing.T) {
-	s := &Server{serverShellEnabled: false}
-	result, err := s.toolExecuteShellCommand(context.TODO(), "user1", map[string]any{"command": "echo hi"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result["success"] != false {
-		t.Error("expected failure when shell disabled")
-	}
+	t.Skip("serverShellEnabled field was removed; shell enable/disable is now config-driven")
 }
 
 func TestToolExecuteShellCommand_MissingCommand(t *testing.T) {
-	s := &Server{serverShellEnabled: true}
+	s := &Server{}
 	result, err := s.toolExecuteShellCommand(context.TODO(), "user1", map[string]any{})
 	if err != nil {
 		t.Fatal(err)

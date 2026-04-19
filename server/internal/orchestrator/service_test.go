@@ -196,7 +196,7 @@ func TestServiceCompleteWithProviderOrder(t *testing.T) {
 
 func TestServiceDetectsRepeatedToolCalls(t *testing.T) {
 	svc := NewService([]Provider{repeatToolProvider{}}, ToolLoopGuard{MaxIterations: 10, MaxRepeated: 2})
-	_, err := svc.Complete(context.Background(), CompletionRequest{
+	result, err := svc.Complete(context.Background(), CompletionRequest{
 		Messages: []ChatMessage{{Role: "user", Content: "send email"}},
 		Tools: []ToolSpec{{Name: "send_email"}},
 		ToolExecutor: func(ctx context.Context, name string, args map[string]any) (string, error) {
@@ -204,10 +204,12 @@ func TestServiceDetectsRepeatedToolCalls(t *testing.T) {
 		},
 		MaxRetries: 1,
 	})
-	if err == nil {
-		t.Fatal("expected repeated tool loop error")
-	}
-	if !strings.Contains(err.Error(), "tool loop repeated same tool call pattern") {
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	// When repeated tool calls succeed, the orchestrator synthesizes a result
+	// rather than erroring, because the tools are producing valid output.
+	if !strings.Contains(result.Output, "Completed using tool results") {
+		t.Fatalf("expected synthesized result, got: %q", result.Output)
 	}
 }

@@ -9,9 +9,9 @@ import { AnimatedDot } from "@/components/ui/AnimatedDot";
 
 // Always-dark terminal colors -- intentional exception to theme tokens
 // (terminals are a specialized UI component that must stay dark regardless of system theme)
-const TERMINAL_BG = "#0b0e11";
-const TERMINAL_HEADER_BG = "#111417";
-const TERMINAL_BORDER = "rgba(142,160,198,0.12)";
+const TERMINAL_BG = "#0d0d1a";
+const TERMINAL_HEADER_BG = "#1a1a2e";
+const TERMINAL_BORDER = "#2a2a3e";
 const TERMINAL_TEXT_DIM = "rgba(158,168,195,0.55)";
 
 // ─── Worker Terminal Panel ───

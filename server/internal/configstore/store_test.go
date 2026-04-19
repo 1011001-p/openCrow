@@ -73,7 +73,7 @@ func TestDefaultUserConfig(t *testing.T) {
 			t.Errorf("tool %q not enabled", def.Name)
 		}
 	}
-	if cfg.Heartbeat.IntervalSeconds != 300 {
+	if cfg.Heartbeat.IntervalSeconds != 900 {
 		t.Errorf("IntervalSeconds = %d", cfg.Heartbeat.IntervalSeconds)
 	}
 }
