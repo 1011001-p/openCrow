@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import QRCode from "react-qr-code";
 import type { UserConfig, CompanionAppConfig, DeviceTaskDTO, DeviceRegistration } from "@/lib/api";
 import { endpoints, getApiBase } from "@/lib/api";
@@ -53,9 +53,12 @@ function CompanionAppCard({
   const [generating, setGenerating] = useState(false);
   const [qrPayload, setQrPayload] = useState<string | null>(null);
 
-  const isOnline = registration
-    ? Date.now() - new Date(registration.lastSeenAt).getTime() < 10 * 60 * 1000
-    : false;
+  const isOnline = useMemo(
+    () => registration
+      ? Date.now() - new Date(registration.lastSeenAt).getTime() < 10 * 60 * 1000
+      : false,
+    [registration],
+  );
 
   const handleRepair = async () => {
     setGenerating(true);
@@ -163,11 +166,6 @@ export function DevicesTab({
 
   const companionApps = config.integrations.companionApps || [];
 
-  useEffect(() => {
-    fetchTasks();
-    fetchRegistrations();
-  }, []);
-
   const fetchRegistrations = async () => {
     try {
       const res = await endpoints.listDeviceRegistrations();
@@ -190,6 +188,11 @@ export function DevicesTab({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchTasks();
+    fetchRegistrations();
+  }, []);
 
   const handleAddTask = async () => {
     if (!newTaskTarget || !newTaskInstruction) return;

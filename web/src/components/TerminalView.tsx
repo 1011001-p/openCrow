@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { endpoints, type UserConfig, getAccessToken, getApiBase } from "@/lib/api";
-import { Button } from "@/components/ui/Button";
+import { getAccessToken, getApiBase } from "@/lib/api";
 
 function getWsBase(): string {
   return getApiBase().replace(/^http/, "ws");
