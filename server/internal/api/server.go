@@ -189,63 +189,22 @@ func (s *Server) routes() {
 		http.Redirect(w, r, "/docs/doc.json", http.StatusMovedPermanently)
 	})
 
-	s.mux.HandleFunc("POST /v1/auth/login", s.handleLogin)
-	s.mux.HandleFunc("POST /v1/auth/refresh", s.handleRefresh)
-	s.mux.Handle("POST /v1/auth/device-tokens", s.requireAccessToken(http.HandlerFunc(s.handleCreateDeviceTokens)))
-
-	s.mux.Handle("GET /v1/sessions", s.requireAccessToken(http.HandlerFunc(s.handleListSessions)))
-	s.mux.Handle("DELETE /v1/sessions/{id}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteSession)))
-	s.mux.Handle("GET /v1/devices", s.requireAccessToken(http.HandlerFunc(s.handleListDevices)))
-
-	s.mux.Handle("GET /v1/conversations", s.requireAccessToken(http.HandlerFunc(s.handleListConversations)))
-	s.mux.Handle("POST /v1/conversations", s.requireAccessToken(http.HandlerFunc(s.handleCreateConversation)))
-	s.mux.Handle("GET /v1/conversations/{id}", s.requireAccessToken(http.HandlerFunc(s.handleGetConversation)))
-	s.mux.Handle("PATCH /v1/conversations/{id}", s.requireAccessToken(http.HandlerFunc(s.handleUpdateConversation)))
-	s.mux.Handle("DELETE /v1/conversations/{id}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteConversation)))
-	s.mux.Handle("GET /v1/conversations/{id}/messages", s.requireAccessToken(http.HandlerFunc(s.handleListMessages)))
-	s.mux.Handle("POST /v1/conversations/{id}/messages", s.requireAccessToken(http.HandlerFunc(s.handleCreateMessage)))
-	s.mux.Handle("GET /v1/conversations/{id}/tool-calls", s.requireAccessToken(http.HandlerFunc(s.handleListToolCalls)))
-
-	s.mux.Handle("GET /v1/tasks", s.requireAccessToken(http.HandlerFunc(s.handleListTasks)))
-	s.mux.Handle("POST /v1/tasks", s.requireAccessToken(http.HandlerFunc(s.handleCreateTask)))
-	s.mux.Handle("GET /v1/tasks/{id}", s.requireAccessToken(http.HandlerFunc(s.handleGetTask)))
-	s.mux.Handle("PATCH /v1/tasks/{id}", s.requireAccessToken(http.HandlerFunc(s.handleUpdateTask)))
-	s.mux.Handle("DELETE /v1/tasks/{id}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteTask)))
-	s.mux.Handle("GET /v1/schedules", s.requireAccessToken(http.HandlerFunc(s.handleListTasks)))
-	s.mux.Handle("POST /v1/schedules", s.requireAccessToken(http.HandlerFunc(s.handleCreateTask)))
-	s.mux.Handle("GET /v1/schedules/{id}", s.requireAccessToken(http.HandlerFunc(s.handleGetTask)))
-	s.mux.Handle("PATCH /v1/schedules/{id}", s.requireAccessToken(http.HandlerFunc(s.handleUpdateTask)))
-	s.mux.Handle("DELETE /v1/schedules/{id}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteTask)))
-
-	s.mux.Handle("GET /v1/memory", s.requireAccessToken(http.HandlerFunc(s.handleListMemories)))
-	s.mux.Handle("POST /v1/memory", s.requireAccessToken(http.HandlerFunc(s.handleCreateMemory)))
-	s.mux.Handle("DELETE /v1/memory/{id}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteMemory)))
-
-	s.mux.Handle("GET /v1/settings", s.requireAccessToken(http.HandlerFunc(s.handleGetSettings)))
-	s.mux.Handle("PUT /v1/settings", s.requireAccessToken(http.HandlerFunc(s.handlePutSettings)))
-
-	s.mux.Handle("POST /v1/orchestrator/complete", s.requireAccessToken(http.HandlerFunc(s.handleOrchestratorComplete)))
-	s.mux.Handle("POST /v1/orchestrator/stream", s.requireAccessToken(http.HandlerFunc(s.handleOrchestratorStream)))
-	s.mux.Handle("GET /v1/realtime/last", s.requireAccessToken(http.HandlerFunc(s.handleRealtimeLastEvent)))
-	s.mux.Handle("GET /v1/config", s.requireAccessToken(http.HandlerFunc(s.handleGetUserConfig)))
-	s.mux.Handle("PUT /v1/config", s.requireAccessToken(http.HandlerFunc(s.handlePutUserConfig)))
-	s.mux.Handle("POST /v1/providers/test", s.requireAccessToken(http.HandlerFunc(s.handleTestProvider)))
-	s.mux.Handle("POST /v1/providers/models", s.requireAccessToken(http.HandlerFunc(s.handleProbeProviderModels)))
-	s.mux.Handle("GET /v1/providers/status", s.requireAccessToken(http.HandlerFunc(s.handleProvidersStatus)))
-	s.mux.Handle("GET /v1/tools", s.requireAccessToken(http.HandlerFunc(s.handleGetToolsConfig)))
-	s.mux.Handle("PUT /v1/tools", s.requireAccessToken(http.HandlerFunc(s.handlePutToolsConfig)))
-	s.mux.Handle("GET /v1/skills", s.requireAccessToken(http.HandlerFunc(s.handleGetSkillsConfig)))
-	s.mux.Handle("PUT /v1/skills", s.requireAccessToken(http.HandlerFunc(s.handlePutSkillsConfig)))
-	s.mux.Handle("POST /v1/mcp/test", s.requireAccessToken(http.HandlerFunc(s.handleTestMCPServer)))
-	s.mux.Handle("POST /v1/telegram/test", s.requireAccessToken(http.HandlerFunc(s.handleTestTelegramBot)))
+	s.registerAuthRoutes()
+	s.registerSessionRoutes()
+	s.registerConversationRoutes()
+	s.registerTaskRoutes()
+	s.registerMemoryRoutes()
+	s.registerSettingsRoutes()
+	s.registerOrchestratorRoutes()
+	s.registerConfigRoutes()
+	s.registerProviderRoutes()
+	s.registerToolRoutes()
+	s.registerSkillRoutes()
+	s.registerMCPRoutes()
+	s.registerTelegramRoutes()
 
 	// File-based skills (SKILL.md on disk)
-	s.mux.Handle("GET /v1/skill-files", s.requireAccessToken(http.HandlerFunc(s.handleListSkillFiles)))
-	s.mux.Handle("POST /v1/skill-files", s.requireAccessToken(http.HandlerFunc(s.handleCreateSkillFile)))
-	s.mux.Handle("POST /v1/skill-files/install", s.requireAccessToken(http.HandlerFunc(s.handleInstallSkills)))
-	s.mux.Handle("GET /v1/skill-files/{slug}", s.requireAccessToken(http.HandlerFunc(s.handleGetSkillFile)))
-	s.mux.Handle("PUT /v1/skill-files/{slug}", s.requireAccessToken(http.HandlerFunc(s.handleUpdateSkillFile)))
-	s.mux.Handle("DELETE /v1/skill-files/{slug}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteSkillFile)))
+	s.registerSkillFileRoutes()
 	s.mux.Handle("POST /v1/server/command", s.requireAccessToken(http.HandlerFunc(s.handleRunServerCommand)))
 	s.mux.Handle("GET /v1/terminal/ws", s.requireAccessToken(http.HandlerFunc(s.handleTerminalWS)))
 
@@ -273,10 +232,104 @@ func (s *Server) routes() {
 
 	s.mux.Handle("GET /v1/status/workers", s.requireAccessToken(http.HandlerFunc(s.handleWorkerStatus)))
 	s.mux.Handle("GET /v1/workers/logs", s.requireAccessToken(http.HandlerFunc(s.handleWorkerLogs)))
-	s.mux.Handle("POST /v1/conversations/{id}/messages/{msgId}/regenerate", s.requireAccessToken(http.HandlerFunc(s.handleRegenerateMessage)))
-
-	s.mux.Handle("GET /v1/whisper/status", s.requireAccessToken(http.HandlerFunc(s.handleWhisperStatus)))
-	s.mux.Handle("POST /v1/voice/transcribe", s.requireAccessToken(http.HandlerFunc(s.handleVoiceTranscribe)))
+	s.registerVoiceRoutes()
 
 	s.mux.HandleFunc("GET /v1/feature-split", s.handleFeatureSplit)
+}
+
+func (s *Server) registerAuthRoutes() {
+	s.mux.HandleFunc("POST /v1/auth/login", s.handleLogin)
+	s.mux.HandleFunc("POST /v1/auth/refresh", s.handleRefresh)
+	s.mux.Handle("POST /v1/auth/device-tokens", s.requireAccessToken(http.HandlerFunc(s.handleCreateDeviceTokens)))
+}
+
+func (s *Server) registerSessionRoutes() {
+	s.mux.Handle("GET /v1/sessions", s.requireAccessToken(http.HandlerFunc(s.handleListSessions)))
+	s.mux.Handle("DELETE /v1/sessions/{id}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteSession)))
+	s.mux.Handle("GET /v1/devices", s.requireAccessToken(http.HandlerFunc(s.handleListDevices)))
+}
+
+func (s *Server) registerConversationRoutes() {
+	s.mux.Handle("GET /v1/conversations", s.requireAccessToken(http.HandlerFunc(s.handleListConversations)))
+	s.mux.Handle("POST /v1/conversations", s.requireAccessToken(http.HandlerFunc(s.handleCreateConversation)))
+	s.mux.Handle("GET /v1/conversations/{id}", s.requireAccessToken(http.HandlerFunc(s.handleGetConversation)))
+	s.mux.Handle("PATCH /v1/conversations/{id}", s.requireAccessToken(http.HandlerFunc(s.handleUpdateConversation)))
+	s.mux.Handle("DELETE /v1/conversations/{id}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteConversation)))
+	s.mux.Handle("GET /v1/conversations/{id}/messages", s.requireAccessToken(http.HandlerFunc(s.handleListMessages)))
+	s.mux.Handle("POST /v1/conversations/{id}/messages", s.requireAccessToken(http.HandlerFunc(s.handleCreateMessage)))
+	s.mux.Handle("GET /v1/conversations/{id}/tool-calls", s.requireAccessToken(http.HandlerFunc(s.handleListToolCalls)))
+	s.mux.Handle("POST /v1/conversations/{id}/messages/{msgId}/regenerate", s.requireAccessToken(http.HandlerFunc(s.handleRegenerateMessage)))
+}
+
+func (s *Server) registerTaskRoutes() {
+	s.mux.Handle("GET /v1/tasks", s.requireAccessToken(http.HandlerFunc(s.handleListTasks)))
+	s.mux.Handle("POST /v1/tasks", s.requireAccessToken(http.HandlerFunc(s.handleCreateTask)))
+	s.mux.Handle("GET /v1/tasks/{id}", s.requireAccessToken(http.HandlerFunc(s.handleGetTask)))
+	s.mux.Handle("PATCH /v1/tasks/{id}", s.requireAccessToken(http.HandlerFunc(s.handleUpdateTask)))
+	s.mux.Handle("DELETE /v1/tasks/{id}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteTask)))
+	s.mux.Handle("GET /v1/schedules", s.requireAccessToken(http.HandlerFunc(s.handleListTasks)))
+	s.mux.Handle("POST /v1/schedules", s.requireAccessToken(http.HandlerFunc(s.handleCreateTask)))
+	s.mux.Handle("GET /v1/schedules/{id}", s.requireAccessToken(http.HandlerFunc(s.handleGetTask)))
+	s.mux.Handle("PATCH /v1/schedules/{id}", s.requireAccessToken(http.HandlerFunc(s.handleUpdateTask)))
+	s.mux.Handle("DELETE /v1/schedules/{id}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteTask)))
+}
+
+func (s *Server) registerMemoryRoutes() {
+	s.mux.Handle("GET /v1/memory", s.requireAccessToken(http.HandlerFunc(s.handleListMemories)))
+	s.mux.Handle("POST /v1/memory", s.requireAccessToken(http.HandlerFunc(s.handleCreateMemory)))
+	s.mux.Handle("DELETE /v1/memory/{id}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteMemory)))
+}
+
+func (s *Server) registerSettingsRoutes() {
+	s.mux.Handle("GET /v1/settings", s.requireAccessToken(http.HandlerFunc(s.handleGetSettings)))
+	s.mux.Handle("PUT /v1/settings", s.requireAccessToken(http.HandlerFunc(s.handlePutSettings)))
+}
+
+func (s *Server) registerOrchestratorRoutes() {
+	s.mux.Handle("POST /v1/orchestrator/complete", s.requireAccessToken(http.HandlerFunc(s.handleOrchestratorComplete)))
+	s.mux.Handle("POST /v1/orchestrator/stream", s.requireAccessToken(http.HandlerFunc(s.handleOrchestratorStream)))
+	s.mux.Handle("GET /v1/realtime/last", s.requireAccessToken(http.HandlerFunc(s.handleRealtimeLastEvent)))
+}
+
+func (s *Server) registerConfigRoutes() {
+	s.mux.Handle("GET /v1/config", s.requireAccessToken(http.HandlerFunc(s.handleGetUserConfig)))
+	s.mux.Handle("PUT /v1/config", s.requireAccessToken(http.HandlerFunc(s.handlePutUserConfig)))
+}
+
+func (s *Server) registerProviderRoutes() {
+	s.mux.Handle("GET /v1/providers/status", s.requireAccessToken(http.HandlerFunc(s.handleProvidersStatus)))
+	s.mux.Handle("POST /v1/providers/test", s.requireAccessToken(http.HandlerFunc(s.handleTestProvider)))
+	s.mux.Handle("POST /v1/providers/models", s.requireAccessToken(http.HandlerFunc(s.handleProbeProviderModels)))
+}
+
+func (s *Server) registerToolRoutes() {
+	s.mux.Handle("GET /v1/tools", s.requireAccessToken(http.HandlerFunc(s.handleGetToolsConfig)))
+	s.mux.Handle("PUT /v1/tools", s.requireAccessToken(http.HandlerFunc(s.handlePutToolsConfig)))
+}
+
+func (s *Server) registerSkillRoutes() {
+	s.mux.Handle("GET /v1/skills", s.requireAccessToken(http.HandlerFunc(s.handleGetSkillsConfig)))
+	s.mux.Handle("PUT /v1/skills", s.requireAccessToken(http.HandlerFunc(s.handlePutSkillsConfig)))
+}
+
+func (s *Server) registerMCPRoutes() {
+	s.mux.Handle("POST /v1/mcp/test", s.requireAccessToken(http.HandlerFunc(s.handleTestMCPServer)))
+}
+
+func (s *Server) registerTelegramRoutes() {
+	s.mux.Handle("POST /v1/telegram/test", s.requireAccessToken(http.HandlerFunc(s.handleTestTelegramBot)))
+}
+
+func (s *Server) registerSkillFileRoutes() {
+	s.mux.Handle("GET /v1/skill-files", s.requireAccessToken(http.HandlerFunc(s.handleListSkillFiles)))
+	s.mux.Handle("POST /v1/skill-files", s.requireAccessToken(http.HandlerFunc(s.handleCreateSkillFile)))
+	s.mux.Handle("POST /v1/skill-files/install", s.requireAccessToken(http.HandlerFunc(s.handleInstallSkills)))
+	s.mux.Handle("GET /v1/skill-files/{slug}", s.requireAccessToken(http.HandlerFunc(s.handleGetSkillFile)))
+	s.mux.Handle("PUT /v1/skill-files/{slug}", s.requireAccessToken(http.HandlerFunc(s.handleUpdateSkillFile)))
+	s.mux.Handle("DELETE /v1/skill-files/{slug}", s.requireAccessToken(http.HandlerFunc(s.handleDeleteSkillFile)))
+}
+
+func (s *Server) registerVoiceRoutes() {
+	s.mux.Handle("GET /v1/voice/status", s.requireAccessToken(http.HandlerFunc(s.handleVoiceStatus)))
+	s.mux.Handle("POST /v1/voice/transcribe", s.requireAccessToken(http.HandlerFunc(s.handleVoiceTranscribe)))
 }

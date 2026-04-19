@@ -317,7 +317,7 @@ export function DevicesTab({
             />
           </div>
           <p className="text-xs text-on-surface-variant mt-4 max-w-xs">
-            The URL your phone will use to reach this server. Use your LAN IP, not localhost.
+            The URL your phone will use to reach this server. Domain or IP.
           </p>
         </div>
 

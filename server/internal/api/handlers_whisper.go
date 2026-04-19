@@ -6,17 +6,17 @@ import (
 	"net/http"
 )
 
-// @Summary Get whisper sidecar status
+// @Summary Get voice sidecar status
 // @Tags    server
 // @Security BearerAuth
 // @Produce json
 // @Success 200 {object} map[string]string
 // @Failure 401 {object} ErrorResponse
-// @Router  /v1/whisper/status [get]
-// handleWhisperStatus returns the current status of the whisper sidecar.
-// GET /v1/whisper/status
+// @Router  /v1/voice/status [get]
+// handleVoiceStatus returns the current status of the voice transcription sidecar.
+// GET /v1/voice/status
 // Response: { "status": "ok" | "downloading" | "down", "model": "ggml-base" }
-func (s *Server) handleWhisperStatus(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleVoiceStatus(w http.ResponseWriter, _ *http.Request) {
 	status := "down"
 	if s.whisper != nil {
 		if s.whisper.endpoint == "" {

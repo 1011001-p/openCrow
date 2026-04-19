@@ -8,6 +8,7 @@ import {
   isAuthenticated,
   setAuthFailureHandler,
   initApiBase,
+  getOpenCrowVersion,
 } from "@/lib/api";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -31,10 +32,12 @@ export default function HomePage() {
   const [device, setDevice] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [openCrowVersion, setOpenCrowVersion] = useState("dev");
 
   // Init API base URL from server config, then check auth
   useEffect(() => {
     initApiBase().then(() => {
+      setOpenCrowVersion(getOpenCrowVersion());
       setAuthed(isAuthenticated());
       setDevice(navigator.userAgent.slice(0, 64) || "Web Browser");
       setAuthFailureHandler(() => setAuthed(false));
@@ -52,7 +55,9 @@ export default function HomePage() {
   }, [authed]);
 
   if (authed === null) return null;
-  if (authed) return <AuthenticatedApp onLogout={() => setAuthed(false)} />;
+  if (authed) {
+    return <AuthenticatedApp onLogout={() => setAuthed(false)} openCrowVersion={openCrowVersion} />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,6 +127,10 @@ export default function HomePage() {
           </span>
         </div>
 
+        <div className="animate-fade-in stagger-2 mb-6 flex justify-center">
+          <Badge variant="default">{openCrowVersion}</Badge>
+        </div>
+
         {/* Health status */}
         <div className="animate-fade-in stagger-3 flex items-center justify-center gap-3 mb-8">
           {healthLoading ? (
@@ -183,7 +192,7 @@ export default function HomePage() {
 
         {/* Footer */}
         <p className="animate-fade-in stagger-5 text-center text-xs text-on-surface-variant/50 mt-6 font-mono">
-          v0.1 &mdash; self-hosted intelligence
+          {openCrowVersion} &mdash; self-hosted intelligence
         </p>
       </div>
     </div>

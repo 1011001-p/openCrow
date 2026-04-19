@@ -4,4 +4,5 @@ export { MarkdownMessage } from "./MarkdownMessage";
 export { FlagIcon } from "./FlagIcon";
 export { formatTime, isUuid, automationLabel, displayValue, renderMessageContent } from "./helpers";
 export { useChatSession } from "./useChatSession";
-export { MessageItem, ToolCallItem } from "./Timeline";
+export { MessageItem } from "./MessageItem";
+export { ToolItem } from "./ToolItem";

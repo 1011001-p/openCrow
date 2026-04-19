@@ -2,7 +2,6 @@
 
 import { type KeyboardEvent } from "react";
 import { type ConversationDTO, type MessageDTO, type ToolCallRecord } from "@/lib/api";
-import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 
 // ─── Extracted chat sub-components ───
@@ -11,7 +10,7 @@ import {
   automationLabel,
   useChatSession,
   MessageItem,
-  ToolCallItem,
+  ToolItem,
 } from "@/components/chat";
 
 type ChatShellProps = {
@@ -145,7 +144,7 @@ export default function ChatShell({
                 return timeline.map((entry) => {
                   if (entry.kind === "tool") {
                     return (
-                      <ToolCallItem
+                      <ToolItem
                         key={`tool-${entry.item.id}`}
                         tc={entry.item}
                         isLive={entry.item.id.startsWith("live-")}

@@ -2978,6 +2978,26 @@ paths:
       summary: Update tool configuration for the current user
       tags:
       - config
+  /v1/voice/status:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get voice sidecar status
+      tags:
+      - server
   /v1/voice/transcribe:
     post:
       consumes:
@@ -3008,26 +3028,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Transcribe an audio file via the whisper sidecar
-      tags:
-      - server
-  /v1/whisper/status:
-    get:
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/api.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get whisper sidecar status
       tags:
       - server
   /v1/workers/logs:

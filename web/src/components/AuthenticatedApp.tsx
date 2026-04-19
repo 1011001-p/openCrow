@@ -88,7 +88,13 @@ function MobileMenuButton({
   );
 }
 
-export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }) {
+export default function AuthenticatedApp({
+  onLogout,
+  openCrowVersion,
+}: {
+  onLogout?: () => void;
+  openCrowVersion: string;
+}) {
   const [activeSection, setActiveSection] = useState<Section>("chat");
   const [requestedConfigTab, setRequestedConfigTab] = useState<string | undefined>(undefined);
   const [conversations, setConversations] = useState<ConversationDTO[]>([]);
@@ -208,7 +214,9 @@ export default function AuthenticatedApp({ onLogout }: { onLogout?: () => void }
                 className="opacity-90 mx-4 crow-icon"
               />
             </h1>
-            <p className="mt-1 font-mono text-xs text-on-surface-variant">v0.1.0 . Active</p>
+            <p className="mt-1 font-mono text-xs text-on-surface-variant">
+              {openCrowVersion} . Active
+            </p>
           </div>
 
           {/* Conversation nav */}

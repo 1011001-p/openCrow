@@ -157,7 +157,7 @@ function WhisperStatusCard() {
 
   useEffect(() => {
     endpoints
-      .getWhisperStatus()
+      .getVoiceStatus()
       .then((res) => {
         setStatus(res.status);
         setModel(res.model);

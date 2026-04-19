@@ -136,7 +136,6 @@ function TelegramBotCard({
             />
             <Input
               label="Notification Chat ID"
-              tooltip="You can find your chat ID on your telegram profile page, it's called ID and it's a 9 digit number"
               value={bot.notificationChatId}
               onChange={(e) =>
                 updateConfig((c) => {

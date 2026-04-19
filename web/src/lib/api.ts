@@ -78,12 +78,19 @@ import type {
 } from "./api-types";
 
 let _apiBase = "http://localhost:8080";
+let _openCrowVersion = "dev";
+
+type AppRuntimeConfig = {
+  apiBaseUrl?: string;
+  openCrowVersion?: string;
+};
 
 export async function initApiBase(): Promise<void> {
   try {
     const res = await fetch("/api/config");
-    const data = await res.json();
+    const data = (await res.json()) as AppRuntimeConfig;
     if (data.apiBaseUrl) _apiBase = data.apiBaseUrl;
+    if (data.openCrowVersion) _openCrowVersion = data.openCrowVersion;
   } catch {
     // keep default
   }
@@ -91,6 +98,10 @@ export async function initApiBase(): Promise<void> {
 
 export function getApiBase(): string {
   return _apiBase;
+}
+
+export function getOpenCrowVersion(): string {
+  return _openCrowVersion;
 }
 
 function getCookie(name: string): string | null {
@@ -681,9 +692,9 @@ export const endpoints = {
       body: JSON.stringify(params),
     }),
 
-  // Whisper / Voice
-  getWhisperStatus: () =>
-    api<{ status: "ok" | "downloading" | "down"; model: string }>("/v1/whisper/status"),
+  // Voice
+  getVoiceStatus: () =>
+    api<{ status: "ok" | "downloading" | "down"; model: string }>("/v1/voice/status"),
   transcribeAudio: (audioBlob: Blob) => {
     const form = new FormData();
     form.append("audio", audioBlob, "recording.webm");
